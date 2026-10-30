@@ -69,3 +69,77 @@ test('save validation rejects inconsistent inventory, missing weapons and forged
   assert.equal(migrateSave(null), null);
   assert.equal(migrateSave({ version: 1, stock: 0, history: [null] }), null);
 });
+
+test('satisfaction starts at 70 and rewards fair prices and fully met demand', () => {
+  const state = { ...createGame(() => .5), stock: game.stockOf(100) };
+  const snapshot = structuredClone(state);
+  const next = finishDay(state, emptyPlan()), report = next.history[0];
+  assert.equal(state.satisfaction, 70);
+  assert.equal(next.satisfaction, 74);
+  assert.equal(report.satisfaction.priceEffect, 0);
+  assert.equal(report.satisfaction.inventoryEffect, 4);
+  assert.equal(report.satisfaction.unmetDemand, 0);
+  assert.deepEqual(state, snapshot);
+});
+test('discounts improve satisfaction and overpriced weapons hurt even with no sales', () => {
+  const state = { ...createGame(() => .5), stock: game.stockOf(1000) };
+  const cheap = emptyPlan(), expensive = emptyPlan();
+  weapons.forEach(w => { cheap.weapons[w.id].price = Math.ceil(w.price / 2); expensive.weapons[w.id].price = w.price * 2; });
+  const discounted = finishDay(state, cheap).history[0].satisfaction;
+  const overpriced = finishDay({ ...state, stock: game.stockOf() }, expensive).history[0].satisfaction;
+  assert.equal(discounted.priceEffect, 3);
+  assert.equal(discounted.inventoryEffect, 4);
+  assert.equal(overpriced.priceEffect, -6);
+  assert.ok(overpriced.change < 0);
+});
+test('shortages use unmet demand across all weapons, including unstocked lines', () => {
+  const next = finishDay(createGame(() => .5), emptyPlan()), r = next.history[0];
+  assert.equal(r.satisfaction.unmetDemand, r.items.reduce((n, item) => n + item.demand, 0));
+  assert.equal(r.satisfaction.inventoryEffect, -12);
+  assert.equal(next.satisfaction, 58);
+  const mixed = { ...createGame(() => .5), stock: { ...game.stockOf(), dagger: 100 } };
+  const report = finishDay(mixed, emptyPlan()).history[0];
+  assert.ok(report.satisfaction.unmetDemand > 0);
+  assert.ok(report.satisfaction.unmetDemand < report.satisfaction.demand);
+  assert.ok(report.satisfaction.inventoryEffect > -12);
+  assert.ok(report.satisfaction.inventoryEffect < 4);
+});
+test('carryover stock satisfies demand without crafting and zero demand has no inventory effect', () => {
+  const state = { ...createGame(() => .5), stock: game.stockOf(100) };
+  const report = finishDay(state, emptyPlan()).history[0];
+  assert.equal(report.quantity, 0); assert.equal(report.satisfaction.inventoryEffect, 4);
+  const p = emptyPlan(); weapons.forEach(w => { p.weapons[w.id].price = 100; });
+  const quiet = finishDay(createGame(() => .5), p).history[0].satisfaction;
+  assert.equal(quiet.demand, 0); assert.equal(quiet.inventoryEffect, 0);
+  assert.ok(Number.isFinite(quiet.score)); assert.ok(quiet.priceEffect < 0);
+});
+test('score stays within 0–100 and reports the actual bounded change', () => {
+  const happy = finishDay({ ...createGame(() => .5), satisfaction: 99, stock: game.stockOf(100) }, emptyPlan());
+  assert.equal(happy.satisfaction, 100); assert.equal(happy.history[0].satisfaction.change, 1);
+  const unhappy = finishDay({ ...createGame(() => .5), satisfaction: 1 }, emptyPlan());
+  assert.equal(unhappy.satisfaction, 0); assert.equal(unhappy.history[0].satisfaction.change, -1);
+});
+test('version-2 saves migrate without rewriting history or inventing demand and remain playable', () => {
+  const old = structuredClone(finishDay(createGame(() => .5), blankPlan()));
+  old.version = 2; delete old.satisfaction;
+  old.history.forEach(r => { delete r.satisfaction; r.items.forEach(item => delete item.demand); });
+  const snapshot = structuredClone(old), migrated = migrateSave(old);
+  assert.equal(migrated.satisfaction, 70); assert.equal(migrated.history[0].satisfaction, null);
+  assert.equal(migrated.cash, old.cash); assert.equal(migrated.seed, old.seed);
+  assert.deepEqual(migrated.stock, old.stock); assert.deepEqual(old, snapshot);
+  assert.ok(migrated.history[0].items.every(item => item.demand === null));
+  assert.ok(validSave(migrated));
+  const next = finishDay(migrated, emptyPlan());
+  assert.equal(next.history[1].satisfaction.before, 70); assert.ok(validSave(next));
+  assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(next))), next);
+});
+test('save validation rejects forged scores, effects, missing demand and broken score continuity', () => {
+  const state = finishDay(finishDay(createGame(() => .5), blankPlan()), emptyPlan());
+  assert.ok(validSave(state));
+  for (const change of [s => s.satisfaction++, s => s.history[0].satisfaction.priceEffect++,
+    s => s.history[1].satisfaction.before++, s => delete s.history[0].items[0].demand,
+    s => s.history[0].items[0].demand = -1, s => s.history[1].satisfaction = null]) {
+    const forged = structuredClone(state); change(forged);
+    assert.equal(validSave(forged), false); assert.equal(migrateSave(forged), null);
+  }
+});

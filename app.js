@@ -1,12 +1,12 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const key = 'alpegos-blacksmith-weapons-v2';
+const key = 'alpegos-blacksmith-weapons-v3';
 const gold = n => `${n.toLocaleString()} g`;
 const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
 let state = Blacksmith.createGame(), storageAvailable = true, servingCustomers = false;
 try {
   const saved = localStorage.getItem(key);
-  const restored = Blacksmith.migrateSave(JSON.parse(saved || localStorage.getItem('alpegos-blacksmith-v1')));
+  const restored = Blacksmith.migrateSave(JSON.parse(saved || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
   if (restored) state = restored;
 } catch { storageAvailable = false; }
 function persist() {
@@ -32,10 +32,21 @@ function budget() {
   $('validation').textContent = state.history.length === 30 ? '' : error;
   $('open-shop').disabled = servingCustomers || Boolean(error);
 }
+const points = n => `${n > 0 ? '+' : ''}${n} pts`;
+function satisfactionReport(report) {
+  const s = report.satisfaction;
+  if (!s) return '<p class="report-note">Satisfaction was not tracked on this day.</p>';
+  const priceReason = s.priceEffect > 0 ? 'Good value compared with market prices' : s.priceEffect < 0 ? 'Prices above market value' : 'Prices balanced around market value';
+  const inventoryReason = s.demand ? `${s.demand - s.unmetDemand} of ${s.demand} requested weapons supplied; ${s.unmetDemand} unmet` : 'No demand today; inventory had no effect';
+  const limited = s.change !== s.priceEffect + s.inventoryEffect ? ' Score capped at 0–100.' : '';
+  return `<section class="satisfaction-report" aria-label="Day ${report.day} customer satisfaction"><strong>Customer satisfaction: ${s.score}/100 (${points(s.change)})</strong><p>${priceReason}: ${points(s.priceEffect)}.</p><p>${inventoryReason}: ${points(s.inventoryEffect)}.</p><p>${s.before} → ${s.score}.${limited}</p></section>`;
+}
 function render() {
   const done = state.history.length === 30, last = state.history.at(-1);
   $('cash').innerHTML = `${state.cash.toLocaleString()} <small>g</small>`;
   $('stock').textContent = Blacksmith.totalStock(state.stock);
+  $('satisfaction').textContent = `${state.satisfaction}/100`;
+  $('satisfaction-note').textContent = last?.satisfaction ? `${points(last.satisfaction.change)} on day ${last.day}` : 'Prices and availability shape your score';
   Blacksmith.weapons.forEach(w => { $(`inventory-${w.id}`).textContent = `${state.stock[w.id]} in stock`; });
   $('profit').innerHTML = `${signed(state.cash - 100).replace(' g', '')} <small>g</small>`;
   $('profit').className = state.cash < 100 ? 'negative' : 'positive';
@@ -53,21 +64,23 @@ function render() {
     $('result-content').className = 'filled-report';
     const rating = state.cash >= 1500 ? 'Master of the forge' : state.cash >= 500 ? 'A flourishing blacksmith' : state.cash > 100 ? 'A promising apprentice' : 'Every master starts somewhere';
     const breakdown = last.items.map((item, i) => `<div><span>${Blacksmith.weapons[i].icon} ${Blacksmith.weapons[i].name}</span><span>${item.sold} sold · ${item.stock} left</span><strong>${gold(item.revenue)}</strong></div>`).join('');
-    $('result-content').innerHTML = `${done ? `<div class="final-banner"><span>✦ ${rating}</span><strong>${gold(state.cash)}</strong><p>Final cash · ${state.history.reduce((n,r) => n+r.sold,0)} weapons sold in 30 days</p></div>` : `<div class="sold-hero"><strong>${last.sold}<small> / ${last.sold + last.stock}</small></strong><span>WEAPONS SOLD</span></div>`}<div class="weapon-sales">${breakdown}</div><div class="report-rows"><div><span>${done ? 'Day 30 revenue' : 'Sales revenue'}</span><strong>${gold(last.revenue)}</strong></div><div><span>Crafting expenses</span><strong>−${gold(last.craftingCost)}</strong></div><div><span>Advertising expenses</span><strong>−${gold(last.advertising)}</strong></div><div class="report-total"><span>Total expenses</span><strong>${gold(last.expenses)}</strong></div><div class="profit-row"><span>Day ${last.day} profit</span><strong class="${last.profit < 0 ? 'negative' : 'positive'}">${signed(last.profit)}</strong></div><div><span>Remaining cash</span><strong>${gold(last.cash)}</strong></div></div><p class="report-note">${done ? `${last.stock} unsold weapons remain. Final score is based on cash; stock is not liquidated.` : last.stock ? `${last.stock} unsold weapons saved for tomorrow. Adjust each weapon’s price to find its buyers.` : last.sold ? 'Sold out! Consider changing your weapon mix or raising prices tomorrow.' : 'No sales today. Try lowering prices or spreading the word.'}</p>`;
+    $('result-content').innerHTML = `${done ? `<div class="final-banner"><span>✦ ${rating}</span><strong>${gold(state.cash)}</strong><p>Final cash · ${state.history.reduce((n,r) => n+r.sold,0)} weapons sold in 30 days</p></div>` : `<div class="sold-hero"><strong>${last.sold}<small> / ${last.sold + last.stock}</small></strong><span>WEAPONS SOLD</span></div>`}<div class="weapon-sales">${breakdown}</div>${satisfactionReport(last)}<div class="report-rows"><div><span>${done ? 'Day 30 revenue' : 'Sales revenue'}</span><strong>${gold(last.revenue)}</strong></div><div><span>Crafting expenses</span><strong>−${gold(last.craftingCost)}</strong></div><div><span>Advertising expenses</span><strong>−${gold(last.advertising)}</strong></div><div class="report-total"><span>Total expenses</span><strong>${gold(last.expenses)}</strong></div><div class="profit-row"><span>Day ${last.day} profit</span><strong class="${last.profit < 0 ? 'negative' : 'positive'}">${signed(last.profit)}</strong></div><div><span>Remaining cash</span><strong>${gold(last.cash)}</strong></div></div><p class="report-note">${done ? `${last.stock} unsold weapons remain. Final score is based on cash; stock is not liquidated.` : last.stock ? `${last.stock} unsold weapons saved for tomorrow. Adjust each weapon’s price to find its buyers.` : last.sold ? 'Sold out! Consider changing your weapon mix or raising prices tomorrow.' : 'No sales today. Try lowering prices or spreading the word.'}</p>`;
   } else {
     $('result-label').textContent = 'THE EVENING REPORT'; $('result-heading').textContent = 'Every blade has a beginning.';
     $('result-content').className = 'empty-report';
     $('result-content').innerHTML = '<div class="empty-icon">⚒</div><h3>The forge is waiting.</h3><p>Choose your weapon mix and open the shop.<br>Your daily results will appear here.</p><div class="tip"><span>✧</span><p><strong>A word from Alpego</strong>Swords sell for more, but daggers are cheaper to make. Mix your stock and watch which weapons sell.</p></div>';
   }
   $('ledger-count').textContent = `${state.history.length} day${state.history.length === 1 ? '' : 's'} in business`;
-  $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(r => `<tr class="ledger-summary"><td><span class="day-chip">${String(r.day).padStart(2, '0')}</span></td><td>All weapons</td><td>${r.quantity}</td><td>${r.sold}</td><td>—</td><td>${gold(r.revenue)}</td><td>${gold(r.expenses)}</td><td class="${r.profit < 0 ? 'negative' : 'positive'}">${signed(r.profit)}</td><td><strong>${gold(r.cash)}</strong></td></tr>${r.items.filter(item => item.quantity || item.sold || item.stock).map(item => { const w = Blacksmith.weapons.find(w => w.id === item.weapon); return `<tr class="ledger-item"><td></td><td>${w.icon} ${w.name}</td><td>${item.quantity}</td><td>${item.sold}</td><td>${gold(item.price)}</td><td>${gold(item.revenue)}</td><td>${gold(item.craftingCost)} craft</td><td>—</td><td>${item.stock} left</td></tr>`; }).join('')}`).join('') : '<tr><td colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
+  $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(r => `<tr class="ledger-summary"><td><span class="day-chip">${String(r.day).padStart(2, '0')}</span></td><td>All weapons</td><td>${r.quantity}</td><td>${r.sold}</td><td>—</td><td>${gold(r.revenue)}</td><td>${gold(r.expenses)}</td><td class="${r.profit < 0 ? 'negative' : 'positive'}">${signed(r.profit)}</td><td><strong>${gold(r.cash)}</strong></td></tr><tr><td colspan="9">${satisfactionReport(r)}</td></tr>${r.items.filter(item => item.quantity || item.sold || item.stock).map(item => { const w = Blacksmith.weapons.find(w => w.id === item.weapon); return `<tr class="ledger-item"><td></td><td>${w.icon} ${w.name}</td><td>${item.quantity}</td><td>${item.sold}</td><td>${gold(item.price)}</td><td>${gold(item.revenue)}</td><td>${gold(item.craftingCost)} craft</td><td>—</td><td>${item.stock} left</td></tr>`; }).join('')}`).join('') : '<tr><td colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
   budget(); persist();
 }
 $('plan-form').addEventListener('input', budget);
 $('plan-form').addEventListener('submit', e => {
   e.preventDefault(); if (servingCustomers) return;
   const error = Blacksmith.validate(state, plan()); if (error) { $('validation').textContent = error; return; }
-  state = Blacksmith.finishDay(state, plan()); persist(); servingCustomers = true;
+  state = Blacksmith.finishDay(state, plan()); persist();
+  $('satisfaction').textContent = `${state.satisfaction}/100`;
+  $('satisfaction-note').textContent = `${points(state.history.at(-1).satisfaction.change)} on day ${state.history.length}`; servingCustomers = true;
   lockInputs(true); $('restart-button').disabled = true; $('open-shop').disabled = true;
   $('phase').textContent = 'SHOP OPEN'; $('open-shop').innerHTML = 'Serving customers… <span>⚒</span>';
   $('result-label').textContent = `DAY ${state.history.length} · SHOP OPEN`; $('result-heading').textContent = 'Adventures start at your counter.';

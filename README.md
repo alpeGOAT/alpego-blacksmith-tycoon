@@ -17,9 +17,18 @@ Crafting and ads are paid upfront. There are no hidden fees, rent, debt, or refu
 
 Peasants, sellswords, hunters, and witchers visit after opening. They leave carrying the relevant sword, axe, spear, or dagger. One visitor represents each sale on small days. Busy days group purchases across at most 16 visitors; mixed orders show the first weapon, and their payment includes every item. The animated count and revenue still match the exact daily totals. Skip to results at any time; reduced-motion settings skip automatically. Saving the resolved day before the scene prevents a reload from repeating sales.
 
+## Customer satisfaction
+
+Your shop starts at **70/100 satisfaction**. Each completed day records two effects:
+
+- **Prices:** each posted price is compared with that weapon's market price. The relative differences are capped at ±100%, averaged equally across all four lines, and multiplied by 6 (rounded). Discounts help; high prices hurt, even for weapons with no sales. Market prices have a neutral effect.
+- **Availability:** meeting all demand adds 4 points. Missing a share of demand reduces that bonus: `round(4 − 16 × unmet demand / total demand)`, down to −12 when no demand is met. Carryover inventory counts. With no demand, this effect is zero.
+
+The score stays between 0 and 100. The overview shows the current score; daily reports and ledger entries show price and inventory effects, requested weapons supplied, and the actual change after the cap. Satisfaction does not alter demand or the final cash score.
+
 ## Local save compatibility
 
-The game writes version-2 saves under **alpegos-blacksmith-weapons-v2**. If no weapon save exists, it reads the original **alpegos-blacksmith-v1** save and migrates the existing ledger, cash, seed, day, and dagger stock without replaying any sales. The other three stocks start at zero. The original dagger-only save is left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
+The game writes version-3 saves under **alpegos-blacksmith-weapons-v3**. Existing version-2 weapon saves are migrated without changing cash, inventory, or sales. Satisfaction starts at 70 when an older save is migrated; old ledger entries are marked as untracked because historical demand was not recorded. Older save keys are left intact. If no weapon save exists, it reads the original **alpegos-blacksmith-v1** save and migrates the existing ledger, cash, seed, day, and dagger stock without replaying any sales. The other three stocks start at zero. The original dagger-only save is left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
 
 ## Optional local server
 

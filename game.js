@@ -16,7 +16,7 @@
   const stockOf = (value = 0) => Object.fromEntries(weapons.map(w => [w.id, value]));
   const totalStock = stock => weapons.reduce((n, w) => n + stock[w.id], 0);
   const blankPlan = () => ({ weapons: Object.fromEntries(weapons.map(w => [w.id, { quantity: w.id === 'dagger' ? 10 : 0, price: w.price }])), advertising: 5 });
-  function createGame(random = Math.random) { return { version: 2, cash: 100, stock: stockOf(), history: [], market: 0, seed: Math.floor(random() * 2147483646) + 1 }; }
+  function createGame(random = Math.random) { return { version: 3, satisfaction: 70, cash: 100, stock: stockOf(), history: [], market: 0, seed: Math.floor(random() * 2147483646) + 1 }; }
   function planCost(plan) { return weapons.reduce((n, w) => n + plan.weapons[w.id].quantity * w.cost, 0); }
   function validate(state, plan) {
     if (state.history.length >= 30) return 'Your 30-day journey is complete. Start a new shop to play again.';
@@ -43,14 +43,15 @@
       const demand = Math.max(0, Math.round((w.demand + 4 * Math.sqrt(plan.advertising) * w.demand / 12) * markets[state.market].factor * Math.exp((w.price - price) / (w.price * .7)) * variation));
       const sold = Math.min(state.stock[w.id] + quantity, demand);
       stock[w.id] = state.stock[w.id] + quantity - sold;
-      return { weapon: w.id, quantity, price, sold, stock: stock[w.id], revenue: sold * price, craftingCost: quantity * w.cost };
+      return { weapon: w.id, quantity, price, demand, sold, stock: stock[w.id], revenue: sold * price, craftingCost: quantity * w.cost };
     });
     const sum = field => items.reduce((n, item) => n + item[field], 0);
     const revenue = sum('revenue'), craftingCost = sum('craftingCost'), expenses = craftingCost + plan.advertising;
-    const report = { day: state.history.length + 1, items, quantity: sum('quantity'), sold: sum('sold'), stock: totalStock(stock), advertising: plan.advertising, craftingCost, revenue, expenses, profit: revenue - expenses, cash: state.cash + revenue - expenses, market: state.market };
-    return { version: 2, cash: report.cash, stock, history: [...state.history, report], market: seed % 5, seed };
+    const satisfaction = satisfactionChange(state.satisfaction, items);
+    const report = { satisfaction, day: state.history.length + 1, items, quantity: sum('quantity'), sold: sum('sold'), stock: totalStock(stock), advertising: plan.advertising, craftingCost, revenue, expenses, profit: revenue - expenses, cash: state.cash + revenue - expenses, market: state.market };
+    return { version: 3, satisfaction: satisfaction.score, cash: report.cash, stock, history: [...state.history, report], market: seed % 5, seed };
   }
-  function validSave(s) {
+  function validLegacySave(s) {
     if (!s || s.version !== 2 || !Number.isSafeInteger(s.seed) || s.seed < 1 || s.seed >= 2147483647 || !Number.isInteger(s.market) || !markets[s.market] || !Array.isArray(s.history) || s.history.length > 30 || !s.stock) return false;
     let cash = 100, stock = stockOf();
     for (const [i, r] of s.history.entries()) {
@@ -67,10 +68,46 @@
     return s.cash === cash && weapons.every(w => s.stock[w.id] === stock[w.id]);
   }
   // Convert the original dagger-only ledger without rerolling or replaying any day.
-  function migrateSave(saved) {
-    if (validSave(saved)) return saved;
+  function migrateLegacySave(saved) {
+    if (validLegacySave(saved)) return saved;
     if (!saved || saved.version !== 1 || !Array.isArray(saved.history) || !saved.history.every(r => r && typeof r === 'object') || !Number.isSafeInteger(saved.stock)) return null;
     const migrated = { ...saved, version: 2, stock: { ...stockOf(), dagger: saved.stock }, history: saved.history.map(r => ({ ...r, craftingCost: r.quantity * 4, items: weapons.map(w => w.id === 'dagger' ? { weapon: w.id, quantity: r.quantity, price: r.price, sold: r.sold, stock: r.stock, revenue: r.revenue, craftingCost: r.quantity * 4 } : { weapon: w.id, quantity: 0, price: w.price, sold: 0, stock: 0, revenue: 0, craftingCost: 0 }) })) };
+    return validLegacySave(migrated) ? migrated : null;
+  }
+  // All four posted prices count, including lines that sold out or attracted no buyers.
+  function satisfactionChange(before, items) {
+    const priceEffect = Math.round(items.reduce((sum, item, i) =>
+      sum + Math.max(-1, Math.min(1, (weapons[i].price - item.price) / weapons[i].price)), 0) / weapons.length * 6);
+    const demand = items.reduce((sum, item) => sum + item.demand, 0);
+    const unmetDemand = items.reduce((sum, item) => sum + item.demand - item.sold, 0);
+    const inventoryEffect = demand ? Math.round(4 - 16 * unmetDemand / demand) : 0;
+    const score = Math.max(0, Math.min(100, before + priceEffect + inventoryEffect));
+    return { before, priceEffect, inventoryEffect, demand, unmetDemand, score, change: score - before };
+  }
+  function validSave(saved) {
+    if (!saved || saved.version !== 3 || !validLegacySave({ ...saved, version: 2 })) return false;
+    let score = 70, tracking = false;
+    for (const report of saved.history) {
+      // Old ledgers do not contain demand; never invent historical satisfaction.
+      if (report.satisfaction === null) {
+        if (tracking || !report.items.every(item => item.demand === null)) return false;
+        continue;
+      }
+      tracking = true;
+      if (!report.satisfaction || !report.items.every(item => Number.isSafeInteger(item.demand) && item.demand >= item.sold)) return false;
+      const expected = satisfactionChange(score, report.items);
+      if (!Object.keys(expected).every(key => report.satisfaction[key] === expected[key])) return false;
+      score = expected.score;
+    }
+    return saved.satisfaction === score;
+  }
+  function migrateSave(saved) {
+    if (validSave(saved)) return saved;
+    const legacy = migrateLegacySave(saved);
+    if (!legacy) return null;
+    const migrated = { ...legacy, version: 3, satisfaction: 70, history: legacy.history.map(report => ({
+      ...report, satisfaction: null, items: report.items.map(item => ({ ...item, demand: null }))
+    })) };
     return validSave(migrated) ? migrated : null;
   }
   const api = { weapons, markets, stockOf, totalStock, blankPlan, planCost, createGame, validate, finishDay, validSave, migrateSave };

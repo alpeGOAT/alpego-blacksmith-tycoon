@@ -9,8 +9,14 @@ const ShopCustomers = (() => {
   ];
   let timers = [], complete = null;
   const $ = id => document.getElementById(id);
+  const accessories = {
+    Peasant: '<path d="M16 49 5 62l2 17h14l3-18z" fill="#a78d56"/><path d="M9 65h10m-9 6h8" stroke="#d2bb80" stroke-width="2"/><path d="M11 59q-3-9 4-11" stroke="#d2bb80" stroke-width="2" fill="none"/>',
+    Sellsword: '<path d="M4 45h17v21q-8 13-17 0z" fill="#8b5745" stroke="#c3b18c" stroke-width="2"/><path d="M12 49v20m-5-12h10" stroke="#d5c79d" stroke-width="2"/>',
+    Hunter: '<path d="m11 47 7-2 8 26-8 3z" fill="#8b6b44"/><path d="m12 45-5-18m9 18-2-22" stroke="#b59d66" stroke-width="2"/><path d="m4 29 6-2-4-6m5 4 5-2-5-6" stroke="#d5c48d" stroke-width="2" fill="none"/>',
+    Witcher: '<path d="m12 6 31 56M47 7 17 62" stroke="#c4ccc1" stroke-width="3"/><path d="m11 14 8-4m20 1 8 4" stroke="#d5bb76" stroke-width="3"/><path d="m8 0 7 12m32-11-6 12" stroke="#6c5e49" stroke-width="4"/><path d="m19 42-9 32h10m21-32 9 32H40" fill="#35434a"/>'
+  };
   function sprite(kind, index) {
-    return `<svg viewBox="0 0 60 104" class="customer-sprite" style="--walk-delay:${index % 3 * -.1}s"><ellipse cx="30" cy="98" rx="17" ry="3" fill="#243e3424"/><g class="customer-body"><path class="customer-leg leg-left" d="M23 68v22l-5 4h11V68" fill="#444c43"/><path class="customer-leg leg-right" d="M32 68v26h12l-5-4V68" fill="#363e36"/><path d="m21 40-6 27h30l-6-27z" fill="${kind.coat}"/><path d="M20 44 13 61m27-17 7 17" stroke="${kind.coat}" stroke-width="8" stroke-linecap="round"/><path d="M23 33v10h14V33" fill="${kind.skin}"/><rect x="19" y="16" width="23" height="23" rx="10" fill="${kind.skin}"/><path d="M24 28h2m9 0h2" stroke="#33483b" stroke-width="2"/><path d="M27 34q4 3 7 0" stroke="#916950" fill="none"/><path d="M18 64h24" stroke="#574d39" stroke-width="4"/>${kind.detail}<g class="bought-dagger"><path d="m46 50 5-24 3 25-4 5z" fill="#d9e3df" stroke="#748b84"/><path d="m45 53 12 2" stroke="#d3aa56" stroke-width="3"/><path d="m50 55-1 9" stroke="#80533d" stroke-width="4"/></g></g></svg>`;
+    return `<svg viewBox="0 0 60 104" class="customer-sprite" style="--walk-delay:${index % 3 * -.1}s"><ellipse cx="30" cy="98" rx="17" ry="3" fill="#243e3424"/><g class="customer-body">${accessories[kind.name]}<path class="customer-leg leg-left" d="M23 68v22l-5 4h11V68" fill="#444c43"/><path class="customer-leg leg-right" d="M32 68v26h12l-5-4V68" fill="#363e36"/><path d="m21 40-6 27h30l-6-27z" fill="${kind.coat}"/><path d="M20 44 13 61m27-17 7 17" stroke="${kind.coat}" stroke-width="8" stroke-linecap="round"/><path d="M23 33v10h14V33" fill="${kind.skin}"/><rect x="19" y="16" width="23" height="23" rx="10" fill="${kind.skin}"/><path d="M24 28h2m9 0h2" stroke="#33483b" stroke-width="2"/><path d="M27 34q4 3 7 0" stroke="#916950" fill="none"/><path d="M18 64h24" stroke="#574d39" stroke-width="4"/>${kind.detail}<g class="bought-dagger"><path d="m46 50 5-24 3 25-4 5z" fill="#d9e3df" stroke="#748b84"/><path d="m45 53 12 2" stroke="#d3aa56" stroke-width="3"/><path d="m50 55-1 9" stroke="#80533d" stroke-width="4"/></g></g></svg>`;
   }
   function later(callback, delay) { timers.push(setTimeout(callback, delay)); }
   function finish() {
@@ -48,7 +54,7 @@ const ShopCustomers = (() => {
       const kind = kinds[(i + report.day - 1) % kinds.length];
       const amount = Math.floor(report.sold / count) + (i < report.sold % count ? 1 : 0);
       const customer = document.createElement('div');
-      customer.className = 'customer';
+      customer.className = `customer customer-${kind.name.toLowerCase()}`;
       customer.style.animationDelay = `${i * stagger}ms`;
       customer.innerHTML = `<span class="purchase-pop">+${amount} ⚔ <b>+${amount * report.price} g</b></span>${sprite(kind, i)}<span class="customer-name">${kind.name}</span>`;
       // Nested effects share the arrival delay with the walking animation.

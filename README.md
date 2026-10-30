@@ -8,6 +8,8 @@ Demand depends on price, advertising (with diminishing returns), the announced d
 
 When you open shop, peasants, sellswords, hunters, and white-haired witchers walk up to the counter, pay, and leave carrying a dagger. Small sales days show one visitor per dagger; busy days group purchases across up to 16 visitors so the scene stays under six seconds. The counter tracks the exact sales and revenue. Skip straight to results at any time; reduced-motion preferences skip the animation automatically. The day is saved before the scene starts, so reloading cannot duplicate a sale.
 
+The visual-polish branch adds a warmer parchment-and-forest palette, clearer figures and form labels, touch-friendly controls, evening-report and dialog transitions, and a more detailed Market Street scene. Customers have extra identifying equipment (basket, shield, quiver, or twin swords) and pause their walking motion at the counter. All decorative movement respects reduced-motion preferences. This is a presentation-only update: prices, costs, demand, sales timing, saves, and the 30-day rules are unchanged. `polish.css` keeps the visual layer separate from the simulation.
+
 Optional local server (Node.js):
 
 ```sh

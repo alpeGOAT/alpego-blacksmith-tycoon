@@ -9,8 +9,14 @@ const ShopCustomers = (() => {
   ];
   let timers = [], complete = null;
   const $ = id => document.getElementById(id);
-  function sprite(kind, index) {
-    return `<svg viewBox="0 0 60 104" class="customer-sprite" style="--walk-delay:${index % 3 * -.1}s"><ellipse cx="30" cy="98" rx="17" ry="3" fill="#243e3424"/><g class="customer-body"><path class="customer-leg leg-left" d="M23 68v22l-5 4h11V68" fill="#444c43"/><path class="customer-leg leg-right" d="M32 68v26h12l-5-4V68" fill="#363e36"/><path d="m21 40-6 27h30l-6-27z" fill="${kind.coat}"/><path d="M20 44 13 61m27-17 7 17" stroke="${kind.coat}" stroke-width="8" stroke-linecap="round"/><path d="M23 33v10h14V33" fill="${kind.skin}"/><rect x="19" y="16" width="23" height="23" rx="10" fill="${kind.skin}"/><path d="M24 28h2m9 0h2" stroke="#33483b" stroke-width="2"/><path d="M27 34q4 3 7 0" stroke="#916950" fill="none"/><path d="M18 64h24" stroke="#574d39" stroke-width="4"/>${kind.detail}<g class="bought-dagger"><path d="m46 50 5-24 3 25-4 5z" fill="#d9e3df" stroke="#748b84"/><path d="m45 53 12 2" stroke="#d3aa56" stroke-width="3"/><path d="m50 55-1 9" stroke="#80533d" stroke-width="4"/></g></g></svg>`;
+  function sprite(kind, index, weapon) {
+    const purchased = {
+      sword: '<path d="m47 51 4-39 4 39-5 5z" fill="#d9e3df" stroke="#748b84"/><path d="m42 53 17 1m-9 1-1 11" stroke="#caa257" stroke-width="3"/>',
+      axe: '<path d="m49 23 1 44" stroke="#80533d" stroke-width="4"/><path d="m49 25 9-5v20l-9-5z" fill="#b7c7be" stroke="#748b84"/>',
+      spear: '<path d="m49 25 1 58" stroke="#80533d" stroke-width="3"/><path d="m45 27 4-20 5 20-4 7z" fill="#d9e3df" stroke="#748b84"/>',
+      dagger: '<path d="m46 50 5-24 3 25-4 5z" fill="#d9e3df" stroke="#748b84"/><path d="m45 53 12 2" stroke="#d3aa56" stroke-width="3"/><path d="m50 55-1 9" stroke="#80533d" stroke-width="4"/>'
+    };
+    return `<svg viewBox="0 0 60 104" class="customer-sprite" style="--walk-delay:${index % 3 * -.1}s"><ellipse cx="30" cy="98" rx="17" ry="3" fill="#243e3424"/><g class="customer-body"><path class="customer-leg leg-left" d="M23 68v22l-5 4h11V68" fill="#444c43"/><path class="customer-leg leg-right" d="M32 68v26h12l-5-4V68" fill="#363e36"/><path d="m21 40-6 27h30l-6-27z" fill="${kind.coat}"/><path d="M20 44 13 61m27-17 7 17" stroke="${kind.coat}" stroke-width="8" stroke-linecap="round"/><path d="M23 33v10h14V33" fill="${kind.skin}"/><rect x="19" y="16" width="23" height="23" rx="10" fill="${kind.skin}"/><path d="M24 28h2m9 0h2" stroke="#33483b" stroke-width="2"/><path d="M27 34q4 3 7 0" stroke="#916950" fill="none"/><path d="M18 64h24" stroke="#574d39" stroke-width="4"/>${kind.detail}<g class="bought-dagger">${purchased[weapon]}</g></g></svg>`;
   }
   function later(callback, delay) { timers.push(setTimeout(callback, delay)); }
   function finish() {
@@ -30,31 +36,36 @@ const ShopCustomers = (() => {
     finish();
     complete = () => {
       $('scene-title').textContent = `Day ${report.day} · ${report.sold ? 'The last customer heads home.' : 'The market closes for the evening.'}`;
-      $('scene-status').textContent = report.sold ? `${report.sold} daggers found a new owner. Another day’s work, well forged.` : 'No buyers today. Tomorrow is a fresh start.';
-      $('scene-tally').textContent = `${report.sold} DAGGERS SOLD · ${report.revenue.toLocaleString()} GOLD EARNED`;
+      $('scene-status').textContent = report.sold ? `${report.sold} weapons found a new owner. Another day’s work, well forged.` : 'No buyers today. Tomorrow is a fresh start.';
+      $('scene-tally').textContent = `${report.sold} WEAPONS SOLD · ${report.revenue.toLocaleString()} GOLD EARNED`;
       callback();
     };
     $('scene-title').textContent = `Day ${report.day} · Open for business!`;
-    $('scene-status').textContent = report.sold ? 'Here come the adventurers. Good steel travels far.' : 'A quiet day on Market Street. No dagger sales today.';
-    $('scene-tally').textContent = '0 DAGGERS SOLD · 0 GOLD EARNED';
+    $('scene-status').textContent = report.sold ? 'Here come the adventurers. Good steel travels far.' : 'A quiet day on Market Street. No weapon sales today.';
+    $('scene-tally').textContent = '0 WEAPONS SOLD · 0 GOLD EARNED';
     $('skip-customers').hidden = false;
     $('street').classList.add('is-open');
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
     $('street').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // One visitor per dagger for small days; large orders are grouped to keep it brief.
+    // One visitor per weapon for small days; large orders are grouped to keep it brief.
     const count = Math.min(report.sold, 16), duration = 2600, stagger = 190;
-    let sold = 0;
+    const units = report.items.flatMap(item => Array.from({ length: item.sold }, () => ({ weapon: item.weapon, price: item.price })));
+    let sold = 0, earned = 0, cursor = 0;
     for (let i = 0; i < count; i++) {
       const kind = kinds[(i + report.day - 1) % kinds.length];
       const amount = Math.floor(report.sold / count) + (i < report.sold % count ? 1 : 0);
+      const order = units.slice(cursor, cursor + amount); cursor += amount;
+      const payment = order.reduce((n, unit) => n + unit.price, 0);
+      const weapon = Blacksmith.weapons.find(w => w.id === order[0].weapon);
+      const orderName = order.every(unit => unit.weapon === weapon.id) ? (amount === 1 ? weapon.name.toLowerCase() : weapon.plural) : 'mixed weapons';
       const customer = document.createElement('div');
       customer.className = 'customer';
       customer.style.animationDelay = `${i * stagger}ms`;
-      customer.innerHTML = `<span class="purchase-pop">+${amount} ⚔ <b>+${amount * report.price} g</b></span>${sprite(kind, i)}<span class="customer-name">${kind.name}</span>`;
+      customer.innerHTML = `<span class="purchase-pop">+${amount} ${orderName} <b>+${payment} g</b></span>${sprite(kind, i, weapon.id)}<span class="customer-name">${kind.name}</span>`;
       // Nested effects share the arrival delay with the walking animation.
       customer.style.setProperty('--arrival-delay', `${i * stagger}ms`);
       $('customer-layer').append(customer);
-      later(() => { sold += amount; $('scene-tally').textContent = `${sold} DAGGERS SOLD · ${(sold * report.price).toLocaleString()} GOLD EARNED`; }, i * stagger + duration * .48);
+      later(() => { sold += amount; earned += payment; $('scene-tally').textContent = `${sold} WEAPONS SOLD · ${earned.toLocaleString()} GOLD EARNED`; }, i * stagger + duration * .48);
     }
     later(finish, count ? duration + (count - 1) * stagger + 150 : 1600);
   }

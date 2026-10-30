@@ -10,4 +10,4 @@ http.createServer((req, res) => {
     if (error) { res.writeHead(500); res.end('Unable to read file'); return; }
     res.writeHead(200, { 'Content-Type': types[path.extname(name)], 'Cache-Control': 'no-cache' }); res.end(data);
   });
-}).listen(4173, '127.0.0.1', () => console.log('Alpego’s Blacksmith Tycoon: http://localhost:4173'));
+}).listen(Number(process.env.PORT || 4173), '127.0.0.1', () => console.log('Alpego’s Blacksmith Tycoon: http://localhost:' + (process.env.PORT || 4173)));

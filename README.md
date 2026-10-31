@@ -28,7 +28,22 @@ The score stays between 0 and 100. The overview shows the current score; daily r
 
 ## Local save compatibility
 
-The game writes version-3 saves under **alpegos-blacksmith-weapons-v3**. Existing version-2 weapon saves are migrated without changing cash, inventory, or sales. Satisfaction starts at 70 when an older save is migrated; old ledger entries are marked as untracked because historical demand was not recorded. Older save keys are left intact. If no weapon save exists, it reads the original **alpegos-blacksmith-v1** save and migrates the existing ledger, cash, seed, day, and dagger stock without replaying any sales. The other three stocks start at zero. The original dagger-only save is left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
+The game writes version-4 saves under **alpegos-blacksmith-weapons-v4**. Existing version-3 saves retain their satisfaction scores and complete history; version-2 weapon saves, version-1 dagger saves, and dagger-only saves from the separate upgrades branch also migrate without changing cash, inventory, purchases, or sales. Satisfaction starts at 70 for saves that did not track it; their old ledger entries remain untracked because historical demand was not recorded. Older save keys are left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
+
+## Workshop upgrades
+
+Buy upgrades between days. They apply immediately, stack, persist across reloads, and reset with a new game. Purchases are blocked during customer visits and after day 30.
+
+| Upgrade | Cost | Effect |
+| --- | ---: | --- |
+| Better anvil | 50 gold | Each weapon costs 1 gold less to craft: sword 13, axe 9, spear 6, dagger 3. |
+| Improved forge | 75 gold | Craft up to 60 weapons in total per day instead of 40. |
+| Precision vise | 65 gold | Buyers value each weapon as if its price were 2 gold lower. |
+| Improved advertising | 50 gold | Paid advertising is treated as 1.5 times the spend before diminishing returns; zero spend still gives no ad boost. |
+
+The vise increases the demand reference by 2 gold without changing the existing satisfaction price formula, which still compares posted prices with the catalog's normal market prices. Anvil and forge affect production. Satisfaction remains based on actual demand and supply.
+
+Upgrades deduct cash immediately and appear in the **Workshop investments** journal. Daily profit covers only crafting and advertising; total profit includes equipment spending: `cash − 100 = sum(daily profits) − sum(upgrade costs)`. Ledger cash is the balance at the close of each day. Reports store each weapon's actual crafting unit cost, so later upgrades never rewrite past expenses. The final score remains cash, with no resale value for equipment or stock.
 
 ## Optional local server
 
@@ -47,4 +62,4 @@ node server.js
 
 Visit http://localhost:4175. Run checks with `node --test game.test.js` and `node --check app.js` / `node --check customers.js` / `node --check game.js`.
 
-The main project includes weapon varieties. Shop upgrades and visual polish remain separate on their own feature branches.
+The main project includes weapon varieties, customer satisfaction, and workshop upgrades.

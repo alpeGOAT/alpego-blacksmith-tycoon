@@ -1,12 +1,12 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const key = 'alpegos-blacksmith-weapons-v3';
+const key = 'alpegos-blacksmith-weapons-v4';
 const gold = n => `${n.toLocaleString()} g`;
 const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
 let state = Blacksmith.createGame(), storageAvailable = true, servingCustomers = false;
 try {
   const saved = localStorage.getItem(key);
-  const restored = Blacksmith.migrateSave(JSON.parse(saved || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
+  const restored = Blacksmith.migrateSave(JSON.parse(saved || localStorage.getItem('alpegos-blacksmith-weapons-v3') || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
   if (restored) state = restored;
 } catch { storageAvailable = false; }
 function persist() {
@@ -15,7 +15,7 @@ function persist() {
 }
 function resetPlan() {
   const p = Blacksmith.blankPlan();
-  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${w.icon}</span><div><strong>${w.name}</strong><span>${w.cost} g to craft · market ${w.price} g</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}">Price (g)<input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
+  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${w.icon}</span><div><strong>${w.name}</strong><span id="craft-info-${w.id}">${w.cost} g to craft · market ${w.price} g</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}">Price (g)<input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
   $('advertising').value = p.advertising;
 }
 function plan() { return { weapons: Object.fromEntries(Blacksmith.weapons.map(w => [w.id, { quantity: $(`quantity-${w.id}`).valueAsNumber, price: $(`price-${w.id}`).valueAsNumber }])), advertising: $('advertising').valueAsNumber }; }
@@ -24,7 +24,7 @@ function lockInputs(disabled) {
   $('advertising').disabled = disabled;
 }
 function budget() {
-  const p = plan(), craftCost = Blacksmith.planCost(p), cost = craftCost + p.advertising;
+  const p = plan(), craftCost = Blacksmith.planCost(p, state), cost = craftCost + p.advertising;
   $('craft-cost').textContent = Number.isFinite(craftCost) ? gold(craftCost) : '—';
   $('ad-cost').textContent = Number.isFinite(p.advertising) ? gold(p.advertising) : '—';
   $('investment').textContent = Number.isFinite(cost) ? gold(cost) : '—';
@@ -33,6 +33,24 @@ function budget() {
   $('open-shop').disabled = servingCustomers || Boolean(error);
 }
 const points = n => `${n > 0 ? '+' : ''}${n} pts`;
+function renderUpgrades() {
+  const finished = state.history.length === 30;
+  $('upgrade-count').textContent = `${state.upgrades.length} / 4 INSTALLED`;
+  $('upgrade-grid').innerHTML = Blacksmith.upgrades.map(u => {
+    const installed = state.upgrades.includes(u.id), disabled = installed || finished || servingCustomers || state.cash < u.cost;
+    return `<article class="upgrade-item${installed ? ' installed' : ''}"><span class="upgrade-icon" aria-hidden="true">${u.icon}</span><h3>${u.name}</h3><p>${u.description}</p><button class="upgrade-buy" type="button" data-upgrade="${u.id}" ${disabled ? 'disabled' : ''}>${installed ? '✓ Installed · Max level' : finished ? 'Season complete' : servingCustomers ? 'Shop is open' : state.cash < u.cost ? `${gold(u.cost)} · Need ${gold(u.cost - state.cash)}` : `Buy for ${gold(u.cost)} →`}</button></article>`;
+  }).join('');
+  const spent = state.purchases.reduce((total, p) => total + p.cost, 0);
+  $('upgrade-spending').textContent = `Workshop investments · ${gold(spent)} spent`;
+  $('upgrade-ledger').innerHTML = state.purchases.length ? state.purchases.map(p => `<div><span>Before day ${p.afterDay + 1} · ${Blacksmith.upgrades.find(u => u.id === p.id).name}</span><strong>−${gold(p.cost)}</strong></div>`).join('') : 'No upgrades purchased yet.';
+  const effect = Blacksmith.effects(state);
+  $('capacity-hint').textContent = `${effect.capacity} weapons total per day · prices in gold`;
+  $('ad-hint').textContent = effect.adReach > 1 ? 'Paid ads count as 50% more spending' : 'Promote every weapon in your shop';
+  Blacksmith.weapons.forEach(w => {
+    $(`quantity-${w.id}`).max = effect.capacity;
+    $(`craft-info-${w.id}`).textContent = `${Blacksmith.unitCost(state, w)} g to craft · market ${w.price} g`;
+  });
+}
 function satisfactionReport(report) {
   const s = report.satisfaction;
   if (!s) return '<p class="report-note">Satisfaction was not tracked on this day.</p>';
@@ -72,15 +90,24 @@ function render() {
   }
   $('ledger-count').textContent = `${state.history.length} day${state.history.length === 1 ? '' : 's'} in business`;
   $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(r => `<tr class="ledger-summary"><td><span class="day-chip">${String(r.day).padStart(2, '0')}</span></td><td>All weapons</td><td>${r.quantity}</td><td>${r.sold}</td><td>—</td><td>${gold(r.revenue)}</td><td>${gold(r.expenses)}</td><td class="${r.profit < 0 ? 'negative' : 'positive'}">${signed(r.profit)}</td><td><strong>${gold(r.cash)}</strong></td></tr><tr><td colspan="9">${satisfactionReport(r)}</td></tr>${r.items.filter(item => item.quantity || item.sold || item.stock).map(item => { const w = Blacksmith.weapons.find(w => w.id === item.weapon); return `<tr class="ledger-item"><td></td><td>${w.icon} ${w.name}</td><td>${item.quantity}</td><td>${item.sold}</td><td>${gold(item.price)}</td><td>${gold(item.revenue)}</td><td>${gold(item.craftingCost)} craft</td><td>—</td><td>${item.stock} left</td></tr>`; }).join('')}`).join('') : '<tr><td colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
-  budget(); persist();
+  renderUpgrades(); budget(); persist();
 }
+$('upgrade-grid').addEventListener('click', e => {
+  const button = e.target.closest('[data-upgrade]');
+  if (!button || button.disabled || servingCustomers) return;
+  const id = button.dataset.upgrade, error = Blacksmith.upgradeError(state, id);
+  if (error) { $('upgrade-status').textContent = error; return; }
+  state = Blacksmith.purchaseUpgrade(state, id);
+  $('upgrade-status').textContent = `${Blacksmith.upgrades.find(u => u.id === id).name} installed. The benefit starts with your next batch. Its cost is recorded in Workshop investments and total profit.`;
+  render();
+});
 $('plan-form').addEventListener('input', budget);
 $('plan-form').addEventListener('submit', e => {
   e.preventDefault(); if (servingCustomers) return;
   const error = Blacksmith.validate(state, plan()); if (error) { $('validation').textContent = error; return; }
   state = Blacksmith.finishDay(state, plan()); persist();
   $('satisfaction').textContent = `${state.satisfaction}/100`;
-  $('satisfaction-note').textContent = `${points(state.history.at(-1).satisfaction.change)} on day ${state.history.length}`; servingCustomers = true;
+  $('satisfaction-note').textContent = `${points(state.history.at(-1).satisfaction.change)} on day ${state.history.length}`; servingCustomers = true; renderUpgrades();
   lockInputs(true); $('restart-button').disabled = true; $('open-shop').disabled = true;
   $('phase').textContent = 'SHOP OPEN'; $('open-shop').innerHTML = 'Serving customers… <span>⚒</span>';
   $('result-label').textContent = `DAY ${state.history.length} · SHOP OPEN`; $('result-heading').textContent = 'Adventures start at your counter.';
@@ -93,5 +120,5 @@ document.querySelector('.dialog-close').addEventListener('click', () => $('help-
 $('help-done').addEventListener('click', () => $('help-dialog').close());
 $('restart-button').addEventListener('click', () => $('restart-dialog').showModal());
 $('cancel-restart').addEventListener('click', () => $('restart-dialog').close());
-$('confirm-restart').addEventListener('click', () => { ShopCustomers.reset(); state = Blacksmith.createGame(); resetPlan(); $('restart-dialog').close(); render(); });
+$('confirm-restart').addEventListener('click', () => { ShopCustomers.reset(); state = Blacksmith.createGame(); resetPlan(); $('upgrade-status').textContent = 'Choose an upgrade when your shop can afford it.'; $('restart-dialog').close(); render(); });
 resetPlan(); render();

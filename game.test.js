@@ -143,3 +143,106 @@ test('save validation rejects forged scores, effects, missing demand and broken 
     assert.equal(validSave(forged), false); assert.equal(migrateSave(forged), null);
   }
 });
+
+test('upgrade purchases charge once, preserve satisfaction, and cannot overdraw cash or buy after day 30', () => {
+  const before = createGame(() => .5), snapshot = structuredClone(before);
+  const bought = game.purchaseUpgrade(before, 'anvil');
+  assert.equal(bought.cash, 50); assert.equal(bought.satisfaction, 70);
+  assert.ok(validSave(bought)); assert.deepEqual(before, snapshot);
+  assert.throws(() => game.purchaseUpgrade(bought, 'anvil'), /already installed/);
+  assert.throws(() => game.purchaseUpgrade(bought, 'forge'), /more gold/);
+  assert.throws(() => game.purchaseUpgrade(bought, 'unknown'), /Unknown/);
+  assert.throws(() => game.purchaseUpgrade({ ...before, history: Array(30) }, 'anvil'), /complete/);
+  const empty = game.purchaseUpgrade(bought, 'advertising');
+  assert.equal(empty.cash, 0); assert.ok(validSave(empty));
+  const p = emptyPlan(); p.advertising = 1; assert.match(validate(empty, p), /exceeds/);
+});
+
+test('anvil discounts all four weapons and historical expenses never change', () => {
+  const p = emptyPlan(); weapons.forEach(w => { p.weapons[w.id].quantity = 1; });
+  const day1 = finishDay(createGame(() => .5), p), historical = structuredClone(day1.history[0]);
+  const upgraded = game.purchaseUpgrade(day1, 'anvil');
+  assert.equal(game.planCost(p, upgraded), 31);
+  const day2 = finishDay(upgraded, p);
+  assert.deepEqual(day2.history[0], historical);
+  assert.deepEqual(day2.history[1].items.map(i => i.unitCost), [13,9,6,3]);
+  assert.equal(day2.history[1].craftingCost, 31);
+  assert.equal(day2.cash, day1.cash - 50 + day2.history[1].profit);
+  assert.ok(validSave(day2));
+});
+
+test('forge capacity is shared across weapons and paid advertising has no free zero-spend boost', () => {
+  const rich = { ...createGame(() => .5), cash: 10000 }, p = emptyPlan();
+  p.weapons.sword.quantity = 30; p.weapons.axe.quantity = 30;
+  assert.match(validate(rich, p), /40 weapons/);
+  const upgraded = game.purchaseUpgrade(rich, 'forge');
+  assert.equal(validate(upgraded, p), '');
+  p.weapons.dagger.quantity = 1; assert.match(validate(upgraded, p), /60 weapons/);
+  const normal = finishDay(rich, emptyPlan()).history[0].items.map(i => i.demand);
+  const ads = game.purchaseUpgrade(rich, 'advertising');
+  assert.deepEqual(finishDay(ads, emptyPlan()).history[0].items.map(i => i.demand), normal);
+  const paid = emptyPlan(); paid.advertising = 100;
+  const plainDemand = finishDay(rich, paid).history[0].items;
+  const adDemand = finishDay(ads, paid).history[0].items;
+  adDemand.forEach((item, i) => assert.ok(item.demand > plainDemand[i].demand));
+});
+
+test('vise increases demand for every weapon while retaining the satisfaction price calculation', () => {
+  const rich = { ...createGame(() => .5), cash: 10000, stock: game.stockOf(1000) }, p = emptyPlan();
+  weapons.forEach(w => { p.weapons[w.id].price = w.price + 2; });
+  const plain = finishDay(rich, p).history[0];
+  const vise = finishDay(game.purchaseUpgrade(rich, 'vise'), p).history[0];
+  vise.items.forEach((item, i) => assert.ok(item.demand >= plain.items[i].demand));
+  assert.ok(vise.items.some((item, i) => item.demand > plain.items[i].demand));
+  assert.equal(vise.satisfaction.priceEffect, plain.satisfaction.priceEffect);
+  assert.equal(vise.satisfaction.inventoryEffect, 4);
+});
+
+test('all upgrades, satisfaction, and investment accounting reconcile through 30 mixed-weapon days', () => {
+  let s = createGame(() => .5), totalProfit = 0;
+  const p = emptyPlan(); weapons.forEach(w => { p.weapons[w.id].quantity = 2; });
+  for (let day = 1; day <= 30; day++) {
+    if (day === 6) for (const u of game.upgrades) s = game.purchaseUpgrade(s, u.id);
+    s = finishDay(s, p); totalProfit += s.history.at(-1).profit;
+    assert.ok(validSave(s), `day ${day}`);
+    assert.equal(s.cash, 100 + totalProfit - s.purchases.reduce((n, u) => n + u.cost, 0));
+    assert.ok(s.satisfaction >= 0 && s.satisfaction <= 100);
+  }
+  assert.equal(s.upgrades.length, 4); assert.equal(s.purchases.length, 4);
+  assert.throws(() => finishDay(s, p), /complete/);
+  assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(s))), s);
+});
+
+test('version-3 cloud saves retain satisfaction and every ledger result when upgraded', () => {
+  const old = structuredClone(finishDay(createGame(() => .5), blankPlan()));
+  old.version = 3; delete old.upgrades; delete old.purchases;
+  old.history.forEach(r => r.items.forEach(item => delete item.unitCost));
+  const snapshot = structuredClone(old), migrated = migrateSave(old);
+  assert.ok(validSave(migrated)); assert.equal(migrated.version, 4);
+  assert.equal(migrated.satisfaction, old.satisfaction);
+  assert.deepEqual(migrated.history[0].satisfaction, old.history[0].satisfaction);
+  assert.equal(migrated.cash, old.cash); assert.deepEqual(migrated.stock, old.stock);
+  assert.deepEqual(old, snapshot);
+  assert.ok(validSave(finishDay(game.purchaseUpgrade(migrated, 'anvil'), emptyPlan())));
+});
+
+test('dagger-only upgrade branch saves retain purchases and original discounted expenses', () => {
+  const old = { version: 2, cash: 120, stock: 0, seed: 42, market: 2, upgrades: ['anvil'], purchases: [{ id: 'anvil', cost: 50, afterDay: 0 }], history: [{ day: 1, quantity: 10, price: 10, unitCost: 3, advertising: 0, sold: 10, stock: 0, revenue: 100, expenses: 30, profit: 70, cash: 120, market: 0 }] };
+  const snapshot = structuredClone(old), migrated = migrateSave(old);
+  assert.ok(validSave(migrated)); assert.equal(migrated.cash, 120);
+  assert.deepEqual(migrated.purchases, old.purchases);
+  assert.equal(migrated.history[0].items[3].unitCost, 3);
+  assert.equal(migrated.history[0].satisfaction, null);
+  assert.ok(validSave(finishDay(migrated, blankPlan())));
+  assert.deepEqual(old, snapshot);
+});
+
+test('save validation rejects invalid, duplicate, reordered, and unaffordable investments', () => {
+  const s = finishDay(game.purchaseUpgrade(createGame(() => .5), 'anvil'), blankPlan());
+  for (const change of [
+    v => v.purchases[0].cost--, v => v.purchases[0].afterDay = 2,
+    v => v.purchases.push({ ...v.purchases[0] }), v => v.upgrades.push('forge'),
+    v => v.history[0].items[0].unitCost++, v => v.history[0].items[3].craftingCost++,
+    v => { v.purchases[0] = { id: 'forge', cost: 75, afterDay: 0 }; v.purchases.push({ id: 'vise', cost: 65, afterDay: 0 }); }
+  ]) { const bad = structuredClone(s); change(bad); assert.equal(validSave(bad), false); assert.equal(migrateSave(bad), null); }
+});

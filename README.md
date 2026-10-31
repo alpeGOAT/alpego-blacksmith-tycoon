@@ -62,4 +62,4 @@ node server.js
 
 Visit http://localhost:4175. Run checks with `node --test game.test.js` and `node --check app.js` / `node --check customers.js` / `node --check game.js`.
 
-The main project includes weapon varieties, customer satisfaction, and workshop upgrades.
+The main project includes weapon varieties, customer satisfaction, workshop upgrades, and visual polish. The visual layer in `polish.css` adds warm parchment colors, more readable controls, report and dialog transitions, richer shop scenery, forge embers, and distinct customer equipment. Walking pauses at the counter, mixed-weapon purchases retain their own sprites, and reduced-motion preferences skip customer playback and disable decorative motion.

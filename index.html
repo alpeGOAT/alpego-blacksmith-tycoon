@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Alpego's Blacksmith Tycoon</title>
   <meta name="description" content="Thirty days. One forge. Build your fortune in a small blacksmith shop.">
-  <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="upgrades.css">
+  <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="upgrades.css"><link rel="stylesheet" href="polish.css">
   <script defer src="game.js"></script><script defer src="customers.js"></script><script defer src="app.js"></script>
 </head>
 <body>
@@ -16,8 +16,8 @@
     <section class="card shop-scene" aria-labelledby="scene-title">
       <div class="scene-heading"><div><p class="eyebrow">LIFE ON MARKET STREET</p><h2 id="scene-title">A blade for every adventure.</h2></div><button class="text-button" id="skip-customers" type="button" hidden>Skip to results →</button></div>
       <div class="street" id="street" aria-hidden="true">
-        <div class="street-cloud cloud-one"></div><div class="street-cloud cloud-two"></div><div class="distant-house house-one"></div><div class="distant-house house-two"></div><div class="street-tree">♠</div>
-        <div class="shop-building"><div class="shop-chimney"><i></i><i></i><i></i></div><div class="shop-roof"></div><div class="shop-sign">⚒ ALPEGO’S FORGE</div><div class="shop-window"><span class="forge-fire">♨</span></div><div class="shop-door"></div><div class="shop-awning"></div><div class="shop-counter"><span>⚔</span><span>⚔</span><span>⚔</span><b>WEAPONS · MADE HERE</b></div></div>
+        <div class="street-cloud cloud-one"></div><div class="street-cloud cloud-two"></div><div class="distant-house house-one"></div><div class="distant-house house-two"></div><div class="street-tree">♠</div><svg class="street-birds" viewBox="0 0 80 35" fill="none"><path d="M6 15q8-9 16 0 8-9 16 0M45 27q5-6 10 0 5-6 10 0" stroke="#6b8061" stroke-width="2" stroke-linecap="round"/></svg><div class="street-waypost"></div><div class="street-grass">⌁⌁</div><div class="street-grass grass-right">⌁⌁</div>
+        <div class="shop-building"><div class="shop-chimney"><i></i><i></i><i></i></div><div class="shop-roof"></div><div class="shop-sign">⚒ ALPEGO’S FORGE</div><div class="shop-window"><span class="forge-fire">♨</span></div><div class="forge-embers"><i></i><i></i><i></i></div><div class="shop-door"></div><div class="shop-awning"></div><div class="shop-counter"><span>⚔</span><span>⚔</span><span>⚔</span><b>WEAPONS · MADE HERE</b></div></div>
         <div class="street-lamp"></div><div class="street-path"></div><div id="customer-layer"></div><span class="street-crate">✦</span>
       </div>
       <div class="scene-footer"><p id="scene-status" role="status">The shutters are up. Open shop to meet your customers.</p><span id="scene-tally">PEASANTS · SELLSWORDS · HUNTERS · WITCHERS</span></div>

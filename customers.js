@@ -36,7 +36,7 @@ const ShopCustomers = (() => {
     finish();
     $('scene-title').textContent = 'A blade for every adventure.';
     $('scene-status').textContent = 'The shutters are up. Open shop to meet your customers.';
-    $('scene-tally').textContent = 'PEASANTS · SELLSWORDS · HUNTERS · WITCHERS';
+    $('scene-tally').textContent = '';
   }
   function play(report, callback) {
     finish();
@@ -67,11 +67,15 @@ const ShopCustomers = (() => {
       const customer = document.createElement('div');
       customer.className = `customer customer-${kind.name.toLowerCase()}`;
       customer.style.animationDelay = `${i * stagger}ms`;
-      customer.innerHTML = `<span class="purchase-pop">+${amount} ${orderName} <b>+${payment} g</b></span>${sprite(kind, i, weapon.id)}<span class="customer-name">${kind.name}</span>`;
+      customer.innerHTML = `<span class="purchase-pop">+${amount} ${orderName} <b>+${payment} <span class="gold-icon" role="img" aria-label="gold"></span></b></span>${sprite(kind, i, weapon.id)}<span class="customer-name">${kind.name}</span>`;
       // Nested effects share the arrival delay with the walking animation.
       customer.style.setProperty('--arrival-delay', `${i * stagger}ms`);
       $('customer-layer').append(customer);
-      later(() => { sold += amount; earned += payment; $('scene-tally').textContent = `${sold} WEAPONS SOLD · ${earned.toLocaleString()} GOLD EARNED`; }, i * stagger + duration * .48);
+      later(() => {
+        sold += amount; earned += payment;
+        $('scene-tally').textContent = `${sold} WEAPONS SOLD · ${earned.toLocaleString()} GOLD EARNED`;
+        document.dispatchEvent(new Event('shop-purchase'));
+      }, i * stagger + duration * .48);
     }
     later(finish, count ? duration + (count - 1) * stagger + 150 : 1600);
   }

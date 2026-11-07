@@ -11,7 +11,7 @@ Run a weapon shop for 30 days, starting with 100 gold. Choose a daily mix from t
 | Spear | 16 gold | 7 gold | 9 |
 | Dagger | 10 gold | 4 gold | 12 |
 
-Each weapon has its own quantity, price, stock, and buyers. Prices are whole gold from 1–100. Craft up to **40 weapons total per day**, subject to available cash. Advertising promotes all four weapon lines and has diminishing returns. Buyers depend on that weapon's price relative to its market price, its base demand, the daily market, and a small random variation. Price defaults follow sword > axe > spear > dagger; you can freely adjust them.
+Each weapon has its own quantity, price, stock, and buyers. Prices are whole gold from 1–100. Craft up to **20 weapons total per day at forge level 0**, subject to available cash. Advertising promotes all four weapon lines and has diminishing returns. Buyers depend on that weapon's price relative to its market price, its base demand, the daily market, and a small random variation. Price defaults follow sword > axe > spear > dagger; you can freely adjust them.
 
 Crafting and ads are paid upfront. There are no hidden fees, rent, debt, or refunds. Unsold weapons carry over separately: setting a weapon's crafting quantity to zero still allows it to sell existing stock. The evening report shows sales and remaining stock for each weapon, plus total revenue, crafting, advertising, profit, and remaining cash. The ledger has a daily summary with weapon detail rows; detail expenses are crafting only and advertising is included once in the daily summary. After day 30 the final score is cash; stock has no liquidation value.
 
@@ -24,26 +24,30 @@ Your shop starts at **70/100 satisfaction**. Each completed day records two effe
 - **Prices:** each posted price is compared with that weapon's market price. The relative differences are capped at ±100%, averaged equally across all four lines, and multiplied by 6 (rounded). Discounts help; high prices hurt, even for weapons with no sales. Market prices have a neutral effect.
 - **Availability:** meeting all demand adds 4 points. Missing a share of demand reduces that bonus: `round(4 − 16 × unmet demand / total demand)`, down to −12 when no demand is met. Carryover inventory counts. With no demand, this effect is zero.
 
-The score stays between 0 and 100. The overview shows the current score; daily reports and ledger entries show price and inventory effects, requested weapons supplied, and the actual change after the cap. Satisfaction does not alter demand or the final cash score.
+The score stays between 0 and 100. The overview shows the current score; the evening report shows price and inventory effects, requested weapons supplied, and the actual change after the cap. Satisfaction details are omitted from the shop ledger. The opening satisfaction score multiplies each weapon’s demand before rounding: `1 + (score − 50) × 0.006`. Scores 0/25/50/75/100 give −30%/−15%/0%/+15%/+30%; the starting score of 70 gives +12%. Each evening’s updated score affects the following day, alongside market conditions, prices, advertising and upgrades. Sales remain capped by stock. The overview shows today’s modifier and the evening report shows tomorrow’s modifier. Customer sprites represent purchases (grouped above 16), rather than a separate count of all visitors. Existing saves and historical reports are preserved; the new demand rule applies to future turns. Final score remains cash.
 
 ## Local save compatibility
 
-The game writes version-4 saves under **alpegos-blacksmith-weapons-v4**. Existing version-3 saves retain their satisfaction scores and complete history; version-2 weapon saves, version-1 dagger saves, and dagger-only saves from the separate upgrades branch also migrate without changing cash, inventory, purchases, or sales. Satisfaction starts at 70 for saves that did not track it; their old ledger entries remain untracked because historical demand was not recorded. Older save keys are left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
+The game writes version-5 saves under **alpegos-blacksmith-weapons-v5**. Existing version-4 saves migrate with their 40/60-weapon capacity preserved as forge level 1/2. Existing version-3 saves retain their satisfaction scores and complete history; version-2 weapon saves, version-1 dagger saves, and dagger-only saves from the separate upgrades branch also migrate without changing cash, inventory, purchases, or sales. Satisfaction starts at 70 for saves that did not track it; their old ledger entries remain untracked because historical demand was not recorded. Older save keys are left intact. Invalid saves are rejected. Local-file storage depends on browser policy; if unavailable, keep the tab open or serve locally.
 
 ## Workshop upgrades
 
-Buy upgrades between days. They apply immediately, stack, persist across reloads, and reset with a new game. Purchases are blocked during customer visits and after day 30.
+Buy upgrades between days. The anvil has three purchasable levels; the forge starts at level 0 with two upgrades. Other upgrades are purchased once. They apply immediately, stack, persist across reloads, and reset with a new game. Existing anvil purchases count as level 1. Purchases are blocked during customer visits and after day 30.
 
 | Upgrade | Cost | Effect |
 | --- | ---: | --- |
-| Better anvil | 50 gold | Each weapon costs 1 gold less to craft: sword 13, axe 9, spear 6, dagger 3. |
-| Improved forge | 75 gold | Craft up to 60 weapons in total per day instead of 40. |
+| Better anvil | 50 gold per level, 150 total | Three levels reduce each weapon’s crafting cost by 1, 2, then 3 gold. Level 1 costs: 13/9/6/3; level 2: 12/8/5/2; level 3: 11/7/4/1 for sword/axe/spear/dagger. |
+| Improved forge | Level 0 included; 75 gold each for levels 1 and 2 | Daily capacity: level 0 = 20, level 1 = 40, level 2 = 60 weapons total. |
 | Precision vise | 65 gold | Buyers value each weapon as if its price were 2 gold lower. |
 | Improved advertising | 50 gold | Paid advertising is treated as 1.5 times the spend before diminishing returns; zero spend still gives no ad boost. |
 
 The vise increases the demand reference by 2 gold without changing the existing satisfaction price formula, which still compares posted prices with the catalog's normal market prices. Anvil and forge affect production. Satisfaction remains based on actual demand and supply.
 
 Upgrades deduct cash immediately and appear in the **Workshop investments** journal. Daily profit covers only crafting and advertising; total profit includes equipment spending: `cash − 100 = sum(daily profits) − sum(upgrade costs)`. Ledger cash is the balance at the close of each day. Reports store each weapon's actual crafting unit cost, so later upgrades never rewrite past expenses. The final score remains cash, with no resale value for equipment or stock.
+
+## Background music
+
+Use **Music: Off / Music: On** in the top-right corner to play or pause **Medieval: The Old Tower Inn** by RandomMind. It starts off on each page load, repeats while enabled, and continues across game days. There is no volume control. A local MP3 is preferred for compatibility, with the original WAV loop as a fallback. No internet connection is required for the bundled audio. Some browser previews restrict media when opening HTML files directly; if playback fails, run `node server.js` and open http://localhost:4173. Source and CC0 license details are in `assets/audio/CREDITS.md`.
 
 ## Optional local server
 

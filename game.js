@@ -17,23 +17,28 @@
   const totalStock = stock => weapons.reduce((n, w) => n + stock[w.id], 0);
   const blankPlan = () => ({ weapons: Object.fromEntries(weapons.map(w => [w.id, { quantity: w.id === 'dagger' ? 10 : 0, price: w.price }])), advertising: 5 });
   const upgrades = [
-    { id: 'anvil', name: 'Better anvil', icon: '⚒', cost: 50, description: 'Less waste, cleaner work. Every weapon costs 1 gold less to craft.' },
-    { id: 'forge', name: 'Improved forge', icon: '♨', cost: 75, description: 'A hotter furnace. Craft up to 60 weapons in total each day instead of 40.' },
+    { id: 'anvil', name: 'Better anvil', icon: '⚒', cost: 50, maxLevel: 3, description: 'Three levels: reduce every weapon’s crafting cost by 1, 2, then 3 gold. Each level costs 50 gold.' },
+    { id: 'forge', name: 'Improved forge', icon: '♨', cost: 75, maxLevel: 3, description: 'Daily weapon limits: level 0 — 20, level 1 — 40, level 2 — 60. New shops start at level 0; each upgrade costs 75 gold.' },
     { id: 'vise', name: 'Precision vise', icon: '⚙', cost: 65, description: 'A finer finish. Buyers value every weapon as if its price were 2 gold lower.' },
     { id: 'advertising', name: 'Improved advertising', icon: '✧', cost: 50, description: 'Better signs and smarter flyers. Paid ads count as 50% more spending, with diminishing returns.' }
   ];
+  function upgradeLevel(state, id) {
+    const purchased = (state.upgrades || []).filter(owned => owned === id).length;
+    return purchased + (id === 'forge' ? (state.forgeBaseLevel || 2) : 0);
+  }
   function effects(state = {}) {
     const owned = state.upgrades || [];
-    return { craftDiscount: owned.includes('anvil') ? 1 : 0, capacity: owned.includes('forge') ? 60 : 40, marketBonus: owned.includes('vise') ? 2 : 0, adReach: owned.includes('advertising') ? 1.5 : 1 };
+    return { craftDiscount: owned.filter(id => id === 'anvil').length, capacity: upgradeLevel(state, 'forge') * 20, marketBonus: owned.includes('vise') ? 2 : 0, adReach: owned.includes('advertising') ? 1.5 : 1 };
   }
   function unitCost(state, weapon) { return weapon.cost - effects(state).craftDiscount; }
-  function createGame(random = Math.random) { return { version: 4, upgrades: [], purchases: [], satisfaction: 70, cash: 100, stock: stockOf(), history: [], market: 0, seed: Math.floor(random() * 2147483646) + 1 }; }
+  function satisfactionMultiplier(score) { return 1 + (score - 50) * .006; }
+  function createGame(random = Math.random) { return { version: 5, forgeBaseLevel: 1, upgrades: [], purchases: [], satisfaction: 70, cash: 100, stock: stockOf(), history: [], market: 0, seed: Math.floor(random() * 2147483646) + 1 }; }
   function planCost(plan, state) { return weapons.reduce((n, w) => n + plan.weapons[w.id].quantity * unitCost(state, w), 0); }
   function upgradeError(state, id) {
     const upgrade = upgrades.find(u => u.id === id);
     if (!upgrade) return 'Unknown upgrade.';
     if (state.history.length >= 30) return 'Your 30-day journey is complete.';
-    if (state.upgrades.includes(id)) return 'This upgrade is already installed.';
+    if (upgradeLevel(state, id) >= (upgrade.maxLevel || 1)) return 'This upgrade is already installed at its maximum level.';
     if (state.cash < upgrade.cost) return `You need ${upgrade.cost - state.cash} more gold for this upgrade.`;
     return '';
   }
@@ -64,9 +69,10 @@
     const seed = state.seed * 16807 % 2147483647, variation = .85 + seed / 2147483647 * .3;
     const stock = stockOf();
     const { marketBonus, adReach } = effects(state);
+    const demandMultiplier = satisfactionMultiplier(state.satisfaction);
     const items = weapons.map(w => {
       const { quantity, price } = plan.weapons[w.id];
-      const demand = Math.max(0, Math.round((w.demand + 4 * Math.sqrt(plan.advertising * adReach) * w.demand / 12) * markets[state.market].factor * Math.exp((w.price + marketBonus - price) / (w.price * .7)) * variation));
+      const demand = Math.max(0, Math.round((w.demand + 4 * Math.sqrt(plan.advertising * adReach) * w.demand / 12) * markets[state.market].factor * Math.exp((w.price + marketBonus - price) / (w.price * .7)) * variation * demandMultiplier));
       const sold = Math.min(state.stock[w.id] + quantity, demand);
       stock[w.id] = state.stock[w.id] + quantity - sold;
       return { weapon: w.id, quantity, price, demand, sold, stock: stock[w.id], revenue: sold * price, unitCost: unitCost(state, w), craftingCost: quantity * unitCost(state, w) };
@@ -127,17 +133,18 @@
     return saved.satisfaction === score;
   }
   function validSave(saved) {
-    if (!saved || saved.version !== 4 || !Number.isSafeInteger(saved.seed) || saved.seed < 1 || saved.seed >= 2147483647 || !Number.isInteger(saved.market) || !markets[saved.market] || !Array.isArray(saved.history) || saved.history.length > 30 || !saved.stock || !Array.isArray(saved.upgrades) || !Array.isArray(saved.purchases) || saved.purchases.length > upgrades.length) return false;
+    if (!saved || ![4, 5].includes(saved.version) || (saved.version === 5 && ![1, 2].includes(saved.forgeBaseLevel)) || !Number.isSafeInteger(saved.seed) || saved.seed < 1 || saved.seed >= 2147483647 || !Number.isInteger(saved.market) || !markets[saved.market] || !Array.isArray(saved.history) || saved.history.length > 30 || !saved.stock || !Array.isArray(saved.upgrades) || !Array.isArray(saved.purchases) || saved.purchases.length > 7) return false;
+    const forgeBaseLevel = saved.version === 4 ? 2 : saved.forgeBaseLevel;
     let cash = 100, stock = stockOf(), cursor = 0;
     const owned = [];
     for (let i = 0; i <= saved.history.length; i++) {
       while (cursor < saved.purchases.length && saved.purchases[cursor]?.afterDay === i) {
         const p = saved.purchases[cursor++], upgrade = upgrades.find(u => u.id === p.id);
-        if (!upgrade || i >= 30 || p.cost !== upgrade.cost || owned.includes(p.id) || cash < p.cost) return false;
+        if (!upgrade || i >= 30 || p.cost !== upgrade.cost || upgradeLevel({ upgrades: owned, forgeBaseLevel }, p.id) >= (upgrade.maxLevel || 1) || cash < p.cost) return false;
         cash -= p.cost; owned.push(p.id);
       }
       if (i === saved.history.length) break;
-      const r = saved.history[i], stage = { upgrades: owned }, capacity = effects(stage).capacity;
+      const r = saved.history[i], stage = { upgrades: owned, forgeBaseLevel }, capacity = effects(stage).capacity;
       if (!r || !['day','quantity','sold','stock','advertising','craftingCost','revenue','expenses','profit','cash','market'].every(k => Number.isSafeInteger(r[k])) || !Array.isArray(r.items) || r.items.length !== weapons.length || r.day !== i + 1 || !markets[r.market]) return false;
       let quantity = 0, sold = 0, revenue = 0, craftingCost = 0;
       for (const [j, w] of weapons.entries()) {
@@ -151,7 +158,7 @@
     return cursor === saved.purchases.length && saved.cash === cash && weapons.every(w => saved.stock[w.id] === stock[w.id]) && saved.upgrades.length === owned.length && saved.upgrades.every((id, i) => id === owned[i]) && validSatisfactionHistory(saved);
   }
   function migrateSave(saved) {
-    if (validSave(saved)) return saved;
+    if (validSave(saved)) return saved.version === 5 ? saved : { ...saved, version: 5, forgeBaseLevel: 2 };
     // The isolated upgrades branch used a dagger-only version-2 format.
     if (saved?.version === 2 && Number.isSafeInteger(saved.stock) && Array.isArray(saved.history) && Array.isArray(saved.purchases) && Array.isArray(saved.upgrades) && saved.history.every(r => r && typeof r === 'object')) {
       const upgraded = { ...saved, version: 4, satisfaction: 70, stock: { ...stockOf(), dagger: saved.stock }, history: saved.history.map(r => {
@@ -162,7 +169,7 @@
           unitCost: w.id === 'dagger' ? r.unitCost : unitCost(stage, w), craftingCost: w.id === 'dagger' ? r.quantity * r.unitCost : 0
         })) };
       }) };
-      return validSave(upgraded) ? upgraded : null;
+      return validSave(upgraded) ? migrateSave(upgraded) : null;
     }
     const tracked = saved?.version === 3 && validLegacySave({ ...saved, version: 2 }) && validSatisfactionHistory(saved);
     const legacy = tracked ? saved : migrateLegacySave(saved);
@@ -170,9 +177,9 @@
     const migrated = { ...legacy, version: 4, upgrades: [], purchases: [], satisfaction: tracked ? legacy.satisfaction : 70, history: legacy.history.map(report => ({
       ...report, satisfaction: tracked ? report.satisfaction : null, items: report.items.map((item, i) => ({ ...item, demand: tracked ? item.demand : null, unitCost: weapons[i].cost }))
     })) };
-    return validSave(migrated) ? migrated : null;
+    return validSave(migrated) ? migrateSave(migrated) : null;
   }
-  const api = { weapons, markets, upgrades, effects, unitCost, upgradeError, purchaseUpgrade, stockOf, totalStock, blankPlan, planCost, createGame, validate, finishDay, validSave, migrateSave };
+  const api = { weapons, markets, upgrades, upgradeLevel, effects, unitCost, satisfactionMultiplier, upgradeError, purchaseUpgrade, stockOf, totalStock, blankPlan, planCost, createGame, validate, finishDay, validSave, migrateSave };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Blacksmith = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

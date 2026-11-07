@@ -3,6 +3,43 @@ const assert = require('node:assert/strict');
 const game = require('./game');
 const { weapons, blankPlan, createGame, finishDay, validate, validSave, migrateSave, totalStock } = game;
 function emptyPlan() { const p = blankPlan(); weapons.forEach(w => { p.weapons[w.id].quantity = 0; }); p.advertising = 0; return p; }
+test('opening satisfaction multiplies demand before rounding with bounded inventory and accounting', () => {
+  const initial = { ...createGame(() => .5), stock: game.stockOf(100) };
+  const seed = initial.seed * 16807 % 2147483647;
+  const variation = .85 + seed / 2147483647 * .3;
+  const scores = [0, 25, 50, 70, 75, 100];
+  const totals = [];
+  for (const score of scores) {
+    const next = finishDay({ ...initial, satisfaction: score }, emptyPlan());
+    const report = next.history[0];
+    assert.equal(game.satisfactionMultiplier(score), 1 + (score - 50) * .006);
+    for (const [i, w] of weapons.entries()) {
+      const item = report.items[i];
+      assert.equal(item.demand, Math.round(w.demand * variation * (1 + (score - 50) * .006)));
+      assert.equal(item.sold, item.demand);
+      assert.equal(item.stock, 100 - item.sold);
+    }
+    assert.equal(next.cash, 100 + report.revenue);
+    totals.push(report.sold);
+  }
+  assert.ok(totals.every((n, i) => i === 0 || n >= totals[i - 1]));
+  assert.ok(totals.at(-1) > totals[0]);
+});
+test('evening satisfaction affects the following turn and old reports remain unchanged', () => {
+  const day1 = finishDay(createGame(() => .5), emptyPlan());
+  const oldReport = structuredClone(day1.history[0]);
+  assert.equal(day1.satisfaction, 58);
+  const day2 = finishDay(day1, emptyPlan());
+  const variation = .85 + day2.seed / 2147483647 * .3;
+  for (const [i, w] of weapons.entries()) {
+    assert.equal(day2.history[1].items[i].demand,
+      Math.round(w.demand * game.markets[day1.market].factor * variation * 1.048));
+    assert.equal(day2.history[1].items[i].sold, 0);
+  }
+  assert.deepEqual(day2.history[0], oldReport);
+  assert.ok(validSave(day2));
+  assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(day2))), day2);
+});
 test('catalog descends sword > axe > spear > dagger and all four can sell on day one', () => {
   assert.deepEqual(weapons.map(w => w.id), ['sword', 'axe', 'spear', 'dagger']);
   assert.deepEqual(weapons.map(w => w.price), [30,22,16,10]);
@@ -27,19 +64,19 @@ test('separate inventory, price and crafting costs reconcile through a mixed 30-
 test('capacity applies across the whole batch, affordability uses each weapon cost, invalid values fail', () => {
   const s = createGame(), p = emptyPlan(), snapshot = JSON.stringify(s);
   p.weapons.sword.quantity = 8; assert.match(validate(s,p), /exceeds/);
-  p.weapons.sword.quantity = 0; p.weapons.dagger.quantity = 20; p.weapons.axe.quantity = 21;
-  assert.match(validate({ ...s, cash: 10000 }, p), /40 weapons/);
+  p.weapons.sword.quantity = 0; p.weapons.dagger.quantity = 10; p.weapons.axe.quantity = 11;
+  assert.match(validate({ ...s, cash: 10000 }, p), /20 weapons/);
   p.weapons.axe.quantity = .1; assert.match(validate(s,p), /whole numbers/);
   p.weapons.axe.quantity = 0; p.weapons.spear.price = 101; assert.match(validate(s,p), /spear price/);
   p.weapons.spear.price = NaN; assert.match(validate(s,p), /whole numbers/);
   assert.equal(JSON.stringify(s), snapshot);
 });
 test('unsold stock remains per weapon and can be sold without crafting or spending', () => {
-  const p = emptyPlan(); p.weapons.dagger.quantity = 25; p.weapons.dagger.price = 100;
+  const p = emptyPlan(); p.weapons.dagger.quantity = 20; p.weapons.dagger.price = 100; p.advertising = 20;
   let s = finishDay(createGame(() => .5), p);
-  assert.equal(s.cash, 0); assert.equal(s.stock.dagger, 25);
+  assert.equal(s.cash, 0); assert.equal(s.stock.dagger, 20);
   const next = emptyPlan(); next.weapons.dagger.price = 1;
-  s = finishDay(s, next); assert.equal(s.stock.dagger, 0); assert.equal(s.cash, 25);
+  s = finishDay(s, next); assert.equal(s.stock.dagger, 0); assert.equal(s.cash, 20);
   assert.equal(s.history[1].items.find(i=>i.weapon === 'sword').sold, 0);
   assert.ok(validSave(s));
 });
@@ -144,18 +181,49 @@ test('save validation rejects forged scores, effects, missing demand and broken 
   }
 });
 
-test('upgrade purchases charge once, preserve satisfaction, and cannot overdraw cash or buy after day 30', () => {
+test('upgrade purchases charge per level, preserve satisfaction, and cannot overdraw cash or buy after day 30', () => {
   const before = createGame(() => .5), snapshot = structuredClone(before);
   const bought = game.purchaseUpgrade(before, 'anvil');
   assert.equal(bought.cash, 50); assert.equal(bought.satisfaction, 70);
   assert.ok(validSave(bought)); assert.deepEqual(before, snapshot);
-  assert.throws(() => game.purchaseUpgrade(bought, 'anvil'), /already installed/);
+  const second = game.purchaseUpgrade(bought, 'anvil');
+  assert.equal(second.cash, 0); assert.equal(game.effects(second).craftDiscount, 2);
+  assert.ok(validSave(second));
+  assert.throws(() => game.purchaseUpgrade(second, 'anvil'), /more gold/);
   assert.throws(() => game.purchaseUpgrade(bought, 'forge'), /more gold/);
   assert.throws(() => game.purchaseUpgrade(bought, 'unknown'), /Unknown/);
   assert.throws(() => game.purchaseUpgrade({ ...before, history: Array(30) }, 'anvil'), /complete/);
   const empty = game.purchaseUpgrade(bought, 'advertising');
   assert.equal(empty.cash, 0); assert.ok(validSave(empty));
   const p = emptyPlan(); p.advertising = 1; assert.match(validate(empty, p), /exceeds/);
+});
+
+test('three anvil levels persist, charge 50 each, preserve history and stop at maximum', () => {
+  let state = createGame(() => .5);
+  const p = emptyPlan(); weapons.forEach(w => { p.weapons[w.id].quantity = 1; });
+  const costs = [[13, 9, 6, 3], [12, 8, 5, 2], [11, 7, 4, 1]];
+  for (let level = 1; level <= 3; level++) {
+    const before = structuredClone(state);
+    state = game.purchaseUpgrade(state, 'anvil');
+    assert.equal(state.cash, before.cash - 50);
+    assert.equal(game.effects(state).craftDiscount, level);
+    assert.deepEqual(weapons.map(w => game.unitCost(state, w)), costs[level - 1]);
+    assert.deepEqual(state.history, before.history);
+    state = finishDay(state, p);
+    assert.deepEqual(state.history.at(-1).items.map(i => i.unitCost), costs[level - 1]);
+    assert.ok(validSave(state));
+    assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(state))), state);
+  }
+  const snapshot = structuredClone(state);
+  assert.throws(() => game.purchaseUpgrade(state, 'anvil'), /maximum level/);
+  assert.deepEqual(state, snapshot);
+  const fourth = structuredClone(state);
+  fourth.purchases.push({ id: 'anvil', cost: 50, afterDay: 3 });
+  fourth.upgrades.push('anvil'); fourth.cash -= 50;
+  assert.equal(validSave(fourth), false);
+  const old = migrateSave({ version: 2, cash: 50, stock: 0, seed: 42, market: 0, history: [], upgrades: ['anvil'], purchases: [{ id: 'anvil', cost: 50, afterDay: 0 }] });
+  assert.equal(game.effects(old).craftDiscount, 1);
+  assert.equal(game.effects(game.purchaseUpgrade(old, 'anvil')).craftDiscount, 2);
 });
 
 test('anvil discounts all four weapons and historical expenses never change', () => {
@@ -171,11 +239,52 @@ test('anvil discounts all four weapons and historical expenses never change', ()
   assert.ok(validSave(day2));
 });
 
+test('forge starts at level 1 and enforces 20, 40 and 60 shared capacity', () => {
+  let state = createGame(() => .5);
+  const earn = emptyPlan(); weapons.forEach(w => { earn.weapons[w.id].quantity = 2; });
+  state = finishDay(state, earn);
+  for (let level = 1; level <= 3; level++) {
+    if (level > 1) {
+      const cash = state.cash;
+      state = game.purchaseUpgrade(state, 'forge');
+      assert.equal(state.cash, cash - 75);
+    }
+    assert.equal(game.upgradeLevel(state, 'forge'), level);
+    assert.equal(game.effects(state).capacity, level * 20);
+    const batch = emptyPlan(); batch.weapons.dagger.quantity = level * 20;
+    assert.equal(validate({ ...state, cash: 10000 }, batch), '');
+    batch.weapons.sword.quantity = 1;
+    assert.match(validate({ ...state, cash: 10000 }, batch), /total each day|total each/);
+    assert.ok(validSave(state));
+    assert.deepEqual(migrateSave(JSON.parse(JSON.stringify(state))), state);
+    state = finishDay(state, earn);
+  }
+  assert.throws(() => game.purchaseUpgrade(state, 'forge'), /maximum level/);
+});
+
+test('version-4 forge saves retain old capacity, investments and historical batches', () => {
+  for (const bought of [false, true]) {
+    let old = { ...createGame(() => .5), version: 4 };
+    delete old.forgeBaseLevel;
+    if (bought) old = game.purchaseUpgrade(old, 'forge');
+    const p = emptyPlan(); p.weapons.dagger.quantity = bought ? 6 : 25;
+    old = finishDay(old, p);
+    const snapshot = structuredClone(old), migrated = migrateSave(old);
+    assert.equal(migrated.version, 5);
+    assert.equal(game.effects(migrated).capacity, bought ? 60 : 40);
+    assert.deepEqual(migrated.history, old.history);
+    assert.deepEqual(migrated.purchases, old.purchases);
+    assert.equal(migrated.cash, old.cash);
+    assert.ok(validSave(migrated));
+    assert.deepEqual(old, snapshot);
+  }
+});
+
 test('forge capacity is shared across weapons and paid advertising has no free zero-spend boost', () => {
   const rich = { ...createGame(() => .5), cash: 10000 }, p = emptyPlan();
   p.weapons.sword.quantity = 30; p.weapons.axe.quantity = 30;
-  assert.match(validate(rich, p), /40 weapons/);
-  const upgraded = game.purchaseUpgrade(rich, 'forge');
+  assert.match(validate(rich, p), /20 weapons/);
+  const upgraded = game.purchaseUpgrade(game.purchaseUpgrade(rich, 'forge'), 'forge');
   assert.equal(validate(upgraded, p), '');
   p.weapons.dagger.quantity = 1; assert.match(validate(upgraded, p), /60 weapons/);
   const normal = finishDay(rich, emptyPlan()).history[0].items.map(i => i.demand);
@@ -218,7 +327,7 @@ test('version-3 cloud saves retain satisfaction and every ledger result when upg
   old.version = 3; delete old.upgrades; delete old.purchases;
   old.history.forEach(r => r.items.forEach(item => delete item.unitCost));
   const snapshot = structuredClone(old), migrated = migrateSave(old);
-  assert.ok(validSave(migrated)); assert.equal(migrated.version, 4);
+  assert.ok(validSave(migrated)); assert.equal(migrated.version, 5);
   assert.equal(migrated.satisfaction, old.satisfaction);
   assert.deepEqual(migrated.history[0].satisfaction, old.history[0].satisfaction);
   assert.equal(migrated.cash, old.cash); assert.deepEqual(migrated.stock, old.stock);

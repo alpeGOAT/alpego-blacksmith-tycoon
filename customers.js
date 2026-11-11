@@ -52,7 +52,12 @@ const ShopCustomers = (() => {
     $('skip-customers').hidden = false;
     $('street').classList.add('is-open');
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
-    $('street').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const narrowScreen = matchMedia('(max-width: 680px)').matches;
+    if (narrowScreen) {
+      $('skip-customers').closest('.scene-heading').scrollIntoView({ block: 'start' });
+    } else {
+      $('street').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     // One visitor per weapon for small days; large orders are grouped to keep it brief.
     const count = Math.min(report.sold, 16), duration = 2600, stagger = 190;
     const units = report.items.flatMap(item => Array.from({ length: item.sold }, () => ({ weapon: item.weapon, price: item.price })));

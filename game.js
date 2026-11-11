@@ -1,5 +1,6 @@
 (function (root) {
   'use strict';
+  const DAILY_DEMAND_LIMIT = 60;
   const weapons = [
     { id: 'sword', name: 'Sword', plural: 'swords', icon: '⚔', price: 30, cost: 14, demand: 5 },
     { id: 'axe', name: 'Axe', plural: 'axes', icon: '🪓', price: 22, cost: 10, demand: 7 },
@@ -31,6 +32,9 @@
     return { craftDiscount: owned.filter(id => id === 'anvil').length, capacity: upgradeLevel(state, 'forge') * 20, marketBonus: owned.includes('vise') ? 2 : 0, adReach: owned.includes('advertising') ? 1.5 : 1 };
   }
   function unitCost(state, weapon) { return weapon.cost - effects(state).craftDiscount; }
+  function isBankrupt(state) {
+    return totalStock(state.stock) === 0 && state.cash < Math.min(...weapons.map(w => unitCost(state, w)));
+  }
   function satisfactionMultiplier(score) { return 1 + (score - 50) * .006; }
   function createGame(random = Math.random) { return { version: 5, forgeBaseLevel: 1, upgrades: [], purchases: [], satisfaction: 70, cash: 100, stock: stockOf(), history: [], market: 0, seed: Math.floor(random() * 2147483646) + 1 }; }
   function planCost(plan, state) { return weapons.reduce((n, w) => n + plan.weapons[w.id].quantity * unitCost(state, w), 0); }
@@ -49,6 +53,7 @@
   }
   function validate(state, plan) {
     if (state.history.length >= 30) return 'Your 30-day journey is complete. Start a new shop to play again.';
+    if (isBankrupt(state)) return 'The shop is bankrupt. You have no stock and cannot afford to craft a weapon. Select New game to try again.';
     if (!plan || !plan.weapons || !Number.isSafeInteger(plan.advertising)) return 'Use whole numbers for all your decisions.';
     const { capacity } = effects(state);
     let quantity = 0;
@@ -64,22 +69,42 @@
     if (planCost(plan, state) + plan.advertising > state.cash) return 'That investment exceeds your gold. Craft fewer weapons or lower your ad budget.';
     return '';
   }
+  function limitDemand(demand) {
+    const total = demand.reduce((sum, amount) => sum + amount, 0);
+    if (total <= DAILY_DEMAND_LIMIT) return demand;
+
+    // Distribute the shared limit proportionally, then assign leftover whole orders.
+    const scaled = demand.map(amount => amount * DAILY_DEMAND_LIMIT);
+    const limited = scaled.map(amount => Math.floor(amount / total));
+    const remaining = DAILY_DEMAND_LIMIT - limited.reduce((sum, amount) => sum + amount, 0);
+    const priority = scaled.map((amount, index) => ({ index, remainder: amount % total }));
+    priority.sort((a, b) => b.remainder - a.remainder);
+    for (const { index } of priority.slice(0, remaining)) limited[index]++;
+    return limited;
+  }
   function finishDay(state, plan) {
     const error = validate(state, plan); if (error) throw new Error(error);
     const seed = state.seed * 16807 % 2147483647, variation = .85 + seed / 2147483647 * .3;
     const stock = stockOf();
     const { marketBonus, adReach } = effects(state);
     const demandMultiplier = satisfactionMultiplier(state.satisfaction);
-    const items = weapons.map(w => {
+    const demandByWeapon = limitDemand(weapons.map(w => {
       const { quantity, price } = plan.weapons[w.id];
-      const demand = Math.max(0, Math.round((w.demand + 4 * Math.sqrt(plan.advertising * adReach) * w.demand / 12) * markets[state.market].factor * Math.exp((w.price + marketBonus - price) / (w.price * .7)) * variation * demandMultiplier));
+      if (state.stock[w.id] + quantity === 0) return 0;
+      const advertisedDemand = w.demand * (1 + Math.sqrt(plan.advertising * adReach) / 3);
+      const priceFactor = Math.exp((w.price + marketBonus - price) / (w.price * .7));
+      return Math.round(advertisedDemand * markets[state.market].factor * priceFactor * variation * demandMultiplier);
+    }));
+    const items = weapons.map((w, index) => {
+      const { quantity, price } = plan.weapons[w.id];
+      const demand = demandByWeapon[index];
       const sold = Math.min(state.stock[w.id] + quantity, demand);
       stock[w.id] = state.stock[w.id] + quantity - sold;
       return { weapon: w.id, quantity, price, demand, sold, stock: stock[w.id], revenue: sold * price, unitCost: unitCost(state, w), craftingCost: quantity * unitCost(state, w) };
     });
     const sum = field => items.reduce((n, item) => n + item[field], 0);
     const revenue = sum('revenue'), craftingCost = sum('craftingCost'), expenses = craftingCost + plan.advertising;
-    const satisfaction = satisfactionChange(state.satisfaction, items);
+    const satisfaction = satisfactionChange(state.satisfaction, items, 'offered-stock');
     const report = { satisfaction, day: state.history.length + 1, items, quantity: sum('quantity'), sold: sum('sold'), stock: totalStock(stock), advertising: plan.advertising, craftingCost, revenue, expenses, profit: revenue - expenses, cash: state.cash + revenue - expenses, market: state.market };
     return { ...state, satisfaction: satisfaction.score, cash: report.cash, stock, history: [...state.history, report], market: seed % 5, seed };
   }
@@ -106,15 +131,21 @@
     const migrated = { ...saved, version: 2, stock: { ...stockOf(), dagger: saved.stock }, history: saved.history.map(r => ({ ...r, craftingCost: r.quantity * 4, items: weapons.map(w => w.id === 'dagger' ? { weapon: w.id, quantity: r.quantity, price: r.price, sold: r.sold, stock: r.stock, revenue: r.revenue, craftingCost: r.quantity * 4 } : { weapon: w.id, quantity: 0, price: w.price, sold: 0, stock: 0, revenue: 0, craftingCost: 0 }) })) };
     return validLegacySave(migrated) ? migrated : null;
   }
-  // All four posted prices count, including lines that sold out or attracted no buyers.
-  function satisfactionChange(before, items) {
-    const priceEffect = Math.round(items.reduce((sum, item, i) =>
-      sum + Math.max(-1, Math.min(1, (weapons[i].price - item.price) / weapons[i].price)), 0) / weapons.length * 6);
-    const demand = items.reduce((sum, item) => sum + item.demand, 0);
-    const unmetDemand = items.reduce((sum, item) => sum + item.demand - item.sold, 0);
-    const inventoryEffect = demand ? Math.round(4 - 16 * unmetDemand / demand) : 0;
+  function satisfactionChange(before, items, model) {
+    const current = model === 'offered-stock';
+    // Sold units plus closing stock recover what was on offer when the shop opened.
+    const offered = current ? items.filter(item => item.sold + item.stock > 0) : items;
+    const priceEffect = offered.length ? Math.round(offered.reduce((sum, item) => {
+      const marketPrice = weapons.find(w => w.id === item.weapon).price;
+      return sum + Math.max(-1, Math.min(1, (marketPrice - item.price) / marketPrice));
+    }, 0) / offered.length * 6) : 0;
+    const demand = offered.reduce((sum, item) => sum + item.demand, 0);
+    const unmetDemand = offered.reduce((sum, item) => sum + item.demand - item.sold, 0);
+    const inventoryEffect = demand ? Math.round(4 - (current ? 8 : 16) * unmetDemand / demand) : current && !offered.length ? -4 : 0;
     const score = Math.max(0, Math.min(100, before + priceEffect + inventoryEffect));
-    return { before, priceEffect, inventoryEffect, demand, unmetDemand, score, change: score - before };
+    const result = { before, priceEffect, inventoryEffect, demand, unmetDemand, score, change: score - before };
+    if (current) result.model = model;
+    return result;
   }
   function validSatisfactionHistory(saved) {
     let score = 70, tracking = false;
@@ -126,7 +157,9 @@
       }
       tracking = true;
       if (!report.satisfaction || !report.items.every(item => Number.isSafeInteger(item.demand) && item.demand >= item.sold)) return false;
-      const expected = satisfactionChange(score, report.items);
+      const model = report.satisfaction.model;
+      if (model !== undefined && model !== 'offered-stock') return false;
+      const expected = satisfactionChange(score, report.items, model);
       if (!Object.keys(expected).every(key => report.satisfaction[key] === expected[key])) return false;
       score = expected.score;
     }
@@ -179,7 +212,7 @@
     })) };
     return validSave(migrated) ? migrateSave(migrated) : null;
   }
-  const api = { weapons, markets, upgrades, upgradeLevel, effects, unitCost, satisfactionMultiplier, upgradeError, purchaseUpgrade, stockOf, totalStock, blankPlan, planCost, createGame, validate, finishDay, validSave, migrateSave };
+  const api = { weapons, markets, upgrades, upgradeLevel, effects, unitCost, isBankrupt, satisfactionMultiplier, upgradeError, purchaseUpgrade, stockOf, totalStock, blankPlan, planCost, createGame, validate, finishDay, validSave, migrateSave };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Blacksmith = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

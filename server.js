@@ -2,7 +2,9 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const files = { '/': 'index.html', '/index.html': 'index.html', '/style.css': 'style.css', '/upgrades.css': 'upgrades.css', '/polish.css': 'polish.css', '/game.js': 'game.js', '/customers.js': 'customers.js', '/app.js': 'app.js', '/music.js': 'music.js', '/assets/audio/the-old-tower-inn.mp3': 'assets/audio/the-old-tower-inn.mp3', '/assets/audio/the-old-tower-inn.wav': 'assets/audio/the-old-tower-inn.wav' };
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav' };
+files['/assets/blacksmith-logo.png'] = 'assets/blacksmith-logo.png';
+files['/assets/forge-wall.png'] = 'assets/forge-wall.png';
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png' };
 http.createServer((req, res) => {
   const name = files[req.url.split('?')[0]];
   if (!name) { res.writeHead(404); res.end('Not found'); return; }

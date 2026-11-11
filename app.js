@@ -4,15 +4,54 @@ const key = 'alpegos-blacksmith-weapons-v5';
 const goldIcon = '<span class="gold-icon" role="img" aria-label="gold"></span>';
 const gold = n => `<span class="gold-amount">${n.toLocaleString()} ${goldIcon}</span>`;
 const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
+const cashDisplay = $('cash');
+const floatingBalance = $('floating-balance');
+function syncFloatingBalance() {
+  const hidden = cashDisplay.getBoundingClientRect().bottom > 0;
+  if (floatingBalance.hidden !== hidden) floatingBalance.hidden = hidden;
+}
 let state = Blacksmith.createGame(), storageAvailable = true, servingCustomers = false;
+let savedSnapshot = null;
 try {
-  const saved = localStorage.getItem(key);
-  const restored = Blacksmith.migrateSave(JSON.parse(saved || localStorage.getItem('alpegos-blacksmith-weapons-v4') || localStorage.getItem('alpegos-blacksmith-weapons-v3') || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
+  savedSnapshot = localStorage.getItem(key);
+  const restored = Blacksmith.migrateSave(JSON.parse(savedSnapshot || localStorage.getItem('alpegos-blacksmith-weapons-v4') || localStorage.getItem('alpegos-blacksmith-weapons-v3') || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
   if (restored) state = restored;
 } catch { storageAvailable = false; }
 function persist() {
-  try { localStorage.setItem(key, JSON.stringify(state)); storageAvailable = true; } catch { storageAvailable = false; }
-  $('save-status').textContent = storageAvailable ? '● Saved on this browser' : 'Session only · saving unavailable';
+  try {
+    const next = JSON.stringify(state);
+    localStorage.setItem(key, next);
+    savedSnapshot = next;
+    storageAvailable = true;
+  } catch { storageAvailable = false; }
+}
+function withCurrentSave(change, messageId) {
+  const apply = () => {
+    if (servingCustomers) return;
+    let latest;
+    try { latest = localStorage.getItem(key); } catch { change(); return; }
+    if (latest === savedSnapshot) { change(); return; }
+
+    let restored;
+    try { restored = Blacksmith.migrateSave(JSON.parse(latest)); } catch {}
+    if (restored) {
+      state = restored;
+      savedSnapshot = latest;
+      ShopCustomers.reset();
+      render();
+    }
+    $(messageId).textContent = restored
+      ? 'Another tab changed this shop. The latest save is loaded. Review it before trying again.'
+      : 'The save changed in another tab. Reload this page before continuing.';
+  };
+  if (navigator.locks) {
+    // Check and save under the same lock so simultaneous clicks cannot overwrite each other.
+    navigator.locks.request(key, apply).catch(() => {
+      $(messageId).textContent = 'Could not access the game save. Try again.';
+    });
+  } else {
+    apply();
+  }
 }
 function resetPlan() {
   const p = Blacksmith.blankPlan();
@@ -65,28 +104,38 @@ function renderUpgrades() {
 function satisfactionReport(report) {
   const s = report.satisfaction;
   if (!s) return '<p class="report-note">Satisfaction was not tracked on this day.</p>';
-  const priceReason = s.priceEffect > 0 ? 'Good value compared with market prices' : s.priceEffect < 0 ? 'Prices above market value' : 'Prices balanced around market value';
-  const inventoryReason = s.demand ? `${s.demand - s.unmetDemand} of ${s.demand} requested weapons supplied; ${s.unmetDemand} unmet` : 'No demand today; inventory had no effect';
+  const offered = report.items.some(item => item.sold + item.stock > 0);
+  const priceReason = s.model && !offered ? 'No prices evaluated'
+    : s.priceEffect > 0 ? 'Good value compared with market prices' : s.priceEffect < 0 ? 'Prices above market value' : 'Prices balanced around market value';
+  const inventoryReason = s.demand ? `${s.demand - s.unmetDemand} of ${s.demand} requests filled${s.model ? ' for weapons you offered' : ''}; ${s.unmetDemand} unmet`
+    : s.model && !offered ? 'No weapons were offered' : 'No demand for the weapons on offer';
   const limited = s.change !== s.priceEffect + s.inventoryEffect ? ' Score capped at 0–100.' : '';
   return `<section class="satisfaction-report" aria-label="Day ${report.day} customer satisfaction"><strong>Customer satisfaction: ${s.score}/100 (${points(s.change)})</strong><p>${priceReason}: ${points(s.priceEffect)}.</p><p>${inventoryReason}: ${points(s.inventoryEffect)}.</p><p>${s.before} → ${s.score}.${limited}</p><p>${report.day === 30 ? 'Season complete; no further customer visits.' : `Expected demand tomorrow: ${demandEffect(s.score)} from satisfaction. Market conditions, prices and advertising also apply.`}</p></section>`;
 }
 function render() {
   const done = state.history.length === 30, last = state.history.at(-1);
-  $('cash').innerHTML = gold(state.cash);
+  const bankrupt = !done && Blacksmith.isBankrupt(state);
+  $('save-status').textContent = storageAvailable
+    ? (savedSnapshot ? '● Saved on this browser' : '● Saves automatically')
+    : 'Session only · saving unavailable';
+  const balance = gold(state.cash);
+  cashDisplay.innerHTML = balance;
+  $('floating-cash').innerHTML = balance;
   $('stock').textContent = Blacksmith.totalStock(state.stock);
   $('satisfaction').textContent = `${state.satisfaction}/100`;
-  $('satisfaction-note').textContent = done ? 'Final satisfaction · season complete' : `${demandEffect(state.satisfaction)} today`;
+  $('satisfaction-note').textContent = done || bankrupt ? 'Final satisfaction' : `${demandEffect(state.satisfaction)} today`;
   Blacksmith.weapons.forEach(w => { $(`inventory-${w.id}`).textContent = `${state.stock[w.id]} in stock`; });
   $('profit').innerHTML = signed(state.cash - 100);
   $('profit').className = state.cash < 100 ? 'negative' : 'positive';
   $('day').innerHTML = `Day ${done ? 30 : state.history.length + 1} <small>/ 30</small>`;
   $('day-progress').style.width = `${state.history.length / 30 * 100}%`;
   $('plan-day').textContent = done ? '30 DAYS · THE JOURNEY IS COMPLETE' : `DAY ${String(state.history.length + 1).padStart(2, '0')} · THE WORKSHOP`;
-  $('phase').textContent = done ? 'SEASON COMPLETE' : 'READY TO FORGE';
-  $('market-title').textContent = done ? 'A month of fire and steel' : Blacksmith.markets[state.market].title;
-  $('market-copy').textContent = done ? 'Your final cash is in. Start a new shop to try a different strategy.' : Blacksmith.markets[state.market].copy;
-  lockInputs(done);
-  $('open-shop').innerHTML = done ? '30 days complete <span>✓</span>' : 'Open shop & finish day <span>→</span>';
+  $('phase').textContent = bankrupt ? 'SHOP CLOSED' : done ? 'SEASON COMPLETE' : 'READY TO FORGE';
+  $('market-title').textContent = bankrupt ? 'The shop is bankrupt' : done ? 'A month of fire and steel' : Blacksmith.markets[state.market].title;
+  $('market-copy').textContent = bankrupt ? 'You have no stock and cannot afford to craft a weapon. Select New game to try again.'
+    : done ? 'Your final cash is in. Start a new shop to try a different strategy.' : Blacksmith.markets[state.market].copy;
+  lockInputs(done || bankrupt);
+  $('open-shop').innerHTML = bankrupt ? 'Shop closed' : done ? '30 days complete <span>✓</span>' : 'Open shop & finish day <span>→</span>';
   if (last) {
     $('result-label').textContent = done ? 'YOUR 30-DAY STORY' : `DAY ${String(last.day).padStart(2, '0')} · THE EVENING REPORT`;
     $('result-heading').textContent = done ? 'The final hammer falls.' : last.profit > 0 ? 'A good day at the forge.' : last.profit < 0 ? 'A lesson at the forge.' : 'An even day at the forge.';
@@ -101,38 +150,65 @@ function render() {
   }
   $('ledger-count').textContent = `${state.history.length} day${state.history.length === 1 ? '' : 's'} in business`;
   $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(r => `<tr class="ledger-summary"><td><span class="day-chip">${String(r.day).padStart(2, '0')}</span></td><td>All weapons</td><td>${r.quantity}</td><td>${r.sold}</td><td>—</td><td>${gold(r.revenue)}</td><td>${gold(r.expenses)}</td><td class="${r.profit < 0 ? 'negative' : 'positive'}">${signed(r.profit)}</td><td><strong>${gold(r.cash)}</strong></td></tr>${r.items.filter(item => item.quantity || item.sold || item.stock).map(item => { const w = Blacksmith.weapons.find(w => w.id === item.weapon); return `<tr class="ledger-item"><td></td><td>${w.icon} ${w.name}</td><td>${item.quantity}</td><td>${item.sold}</td><td>${gold(item.price)}</td><td>${gold(item.revenue)}</td><td>${gold(item.craftingCost)} craft</td><td>—</td><td>${item.stock} left</td></tr>`; }).join('')}`).join('') : '<tr><td colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
-  renderUpgrades(); budget(); persist();
+  if (bankrupt) {
+    $('result-label').textContent = 'SHOP CLOSED';
+    $('result-heading').textContent = 'The shop is bankrupt.';
+    const reportNote = $('result-content').querySelector(':scope > .report-note:last-child');
+    if (last) {
+      $('result-content').querySelector('.satisfaction-report > p:last-child')?.remove();
+      if (reportNote) reportNote.textContent = $('market-copy').textContent;
+    } else {
+      $('result-content').textContent = $('market-copy').textContent;
+    }
+  }
+  renderUpgrades(); budget(); syncFloatingBalance();
 }
 $('upgrade-grid').addEventListener('click', e => {
   const button = e.target.closest('[data-upgrade]');
   if (!button || button.disabled || servingCustomers) return;
-  const id = button.dataset.upgrade, error = Blacksmith.upgradeError(state, id);
-  if (error) { $('upgrade-status').textContent = error; return; }
-  state = Blacksmith.purchaseUpgrade(state, id);
-  $('upgrade-status').textContent = `${Blacksmith.upgrades.find(u => u.id === id).name}${['anvil', 'forge'].includes(id) ? ` level ${Blacksmith.upgradeLevel(state, id) - (id === 'forge' ? 1 : 0)}` : ''} installed. The benefit starts with your next batch. Its cost is recorded in Workshop investments and total profit.`;
-  render();
+  const id = button.dataset.upgrade;
+  withCurrentSave(() => {
+    const error = Blacksmith.upgradeError(state, id);
+    if (error) { $('upgrade-status').textContent = error; return; }
+    state = Blacksmith.purchaseUpgrade(state, id);
+    persist();
+    $('upgrade-status').textContent = `${Blacksmith.upgrades.find(u => u.id === id).name}${['anvil', 'forge'].includes(id) ? ` level ${Blacksmith.upgradeLevel(state, id) - (id === 'forge' ? 1 : 0)}` : ''} installed. The benefit starts with your next batch. Its cost is recorded in Workshop investments and total profit.`;
+    render();
+  }, 'upgrade-status');
 });
 $('plan-form').addEventListener('input', budget);
 $('plan-form').addEventListener('submit', e => {
   e.preventDefault(); if (servingCustomers) return;
-  const error = Blacksmith.validate(state, plan()); if (error) { $('validation').textContent = error; return; }
-  state = Blacksmith.finishDay(state, plan()); persist();
-  $('satisfaction').textContent = `${state.satisfaction}/100`;
-  $('satisfaction-note').textContent = `${points(state.history.at(-1).satisfaction.change)} on day ${state.history.length}`; servingCustomers = true; renderUpgrades();
-  lockInputs(true); $('restart-button').disabled = true; $('open-shop').disabled = true;
-  $('phase').textContent = 'SHOP OPEN'; $('open-shop').innerHTML = 'Serving customers… <span>⚒</span>';
-  $('result-label').textContent = `DAY ${state.history.length} · SHOP OPEN`; $('result-heading').textContent = 'Adventures start at your counter.';
-  $('result-content').className = 'empty-report'; $('result-content').innerHTML = '<div class="empty-icon">⚔</div><h3>Steel, smiles, and a little gold.</h3><p>Customers are visiting the shop above.<br>Your evening report is on its way.</p>';
-  ShopCustomers.play(state.history.at(-1), () => { servingCustomers = false; $('restart-button').disabled = false; render(); });
+  withCurrentSave(() => {
+    const error = Blacksmith.validate(state, plan()); if (error) { $('validation').textContent = error; return; }
+    state = Blacksmith.finishDay(state, plan()); persist();
+    $('satisfaction').textContent = `${state.satisfaction}/100`;
+    $('satisfaction-note').textContent = `${points(state.history.at(-1).satisfaction.change)} on day ${state.history.length}`; servingCustomers = true; renderUpgrades();
+    lockInputs(true); $('restart-button').disabled = true; $('open-shop').disabled = true;
+    $('phase').textContent = 'SHOP OPEN'; $('open-shop').innerHTML = 'Serving customers… <span>⚒</span>';
+    $('result-label').textContent = `DAY ${state.history.length} · SHOP OPEN`; $('result-heading').textContent = 'Adventures start at your counter.';
+    $('result-content').className = 'empty-report'; $('result-content').innerHTML = '<div class="empty-icon">⚔</div><h3>Steel, smiles, and a little gold.</h3><p>Customers are visiting the shop above.<br>Your evening report is on its way.</p>';
+    ShopCustomers.play(state.history.at(-1), () => { servingCustomers = false; $('restart-button').disabled = false; render(); });
+  }, 'validation');
 });
 $('skip-customers').addEventListener('click', ShopCustomers.finish);
 $('help-button').addEventListener('click', () => $('help-dialog').showModal());
 document.querySelector('.dialog-close').addEventListener('click', () => $('help-dialog').close());
 $('help-done').addEventListener('click', () => $('help-dialog').close());
-$('restart-button').addEventListener('click', () => $('restart-dialog').showModal());
+$('restart-button').addEventListener('click', () => { $('restart-status').textContent = ''; $('restart-dialog').showModal(); });
 $('cancel-restart').addEventListener('click', () => $('restart-dialog').close());
-$('confirm-restart').addEventListener('click', () => { ShopCustomers.reset(); state = Blacksmith.createGame(); resetPlan(); $('upgrade-status').textContent = 'Choose an upgrade when your shop can afford it.'; $('restart-dialog').close(); render(); });
+$('confirm-restart').addEventListener('click', () => withCurrentSave(() => {
+  ShopCustomers.reset();
+  state = Blacksmith.createGame();
+  persist();
+  resetPlan();
+  $('upgrade-status').textContent = 'Choose an upgrade when your shop can afford it.';
+  $('restart-dialog').close();
+  render();
+}, 'restart-status'));
 resetPlan(); render();
+window.addEventListener('scroll', syncFloatingBalance, { passive: true });
+window.addEventListener('resize', syncFloatingBalance);
 
 // Real CC0 hammer-on-anvil recording by VishwaJai (see assets/audio/CREDITS.md).
 (() => {

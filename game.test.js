@@ -28,13 +28,15 @@ test('opening satisfaction multiplies demand before rounding with bounded invent
 test('evening satisfaction affects the following turn and old reports remain unchanged', () => {
   const day1 = finishDay(createGame(() => .5), emptyPlan());
   const oldReport = structuredClone(day1.history[0]);
-  assert.equal(day1.satisfaction, 58);
-  const day2 = finishDay(day1, emptyPlan());
+  assert.equal(day1.satisfaction, 66);
+  const plan = emptyPlan();
+  for (const w of weapons) plan.weapons[w.id].quantity = 1;
+  const day2 = finishDay(day1, plan);
   const variation = .85 + day2.seed / 2147483647 * .3;
   for (const [i, w] of weapons.entries()) {
     assert.equal(day2.history[1].items[i].demand,
-      Math.round(w.demand * game.markets[day1.market].factor * variation * 1.048));
-    assert.equal(day2.history[1].items[i].sold, 0);
+      Math.round(w.demand * game.markets[day1.market].factor * variation * 1.096));
+    assert.equal(day2.history[1].items[i].sold, 1);
   }
   assert.deepEqual(day2.history[0], oldReport);
   assert.ok(validSave(day2));
@@ -118,35 +120,42 @@ test('satisfaction starts at 70 and rewards fair prices and fully met demand', (
   assert.equal(report.satisfaction.unmetDemand, 0);
   assert.deepEqual(state, snapshot);
 });
-test('discounts improve satisfaction and overpriced weapons hurt even with no sales', () => {
+test('discounts improve satisfaction and overpriced stocked weapons hurt', () => {
   const state = { ...createGame(() => .5), stock: game.stockOf(1000) };
   const cheap = emptyPlan(), expensive = emptyPlan();
   weapons.forEach(w => { cheap.weapons[w.id].price = Math.ceil(w.price / 2); expensive.weapons[w.id].price = w.price * 2; });
   const discounted = finishDay(state, cheap).history[0].satisfaction;
-  const overpriced = finishDay({ ...state, stock: game.stockOf() }, expensive).history[0].satisfaction;
+  const overpriced = finishDay(state, expensive).history[0].satisfaction;
   assert.equal(discounted.priceEffect, 3);
   assert.equal(discounted.inventoryEffect, 4);
   assert.equal(overpriced.priceEffect, -6);
   assert.ok(overpriced.change < 0);
 });
-test('shortages use unmet demand across all weapons, including unstocked lines', () => {
+test('only stocked weapons affect price and inventory satisfaction', () => {
   const next = finishDay(createGame(() => .5), emptyPlan()), r = next.history[0];
-  assert.equal(r.satisfaction.unmetDemand, r.items.reduce((n, item) => n + item.demand, 0));
-  assert.equal(r.satisfaction.inventoryEffect, -12);
-  assert.equal(next.satisfaction, 58);
+  assert.equal(r.satisfaction.unmetDemand, 0);
+  assert.equal(r.satisfaction.inventoryEffect, -4);
+  assert.equal(next.satisfaction, 66);
   const mixed = { ...createGame(() => .5), stock: { ...game.stockOf(), dagger: 100 } };
-  const report = finishDay(mixed, emptyPlan()).history[0];
-  assert.ok(report.satisfaction.unmetDemand > 0);
-  assert.ok(report.satisfaction.unmetDemand < report.satisfaction.demand);
-  assert.ok(report.satisfaction.inventoryEffect > -12);
-  assert.ok(report.satisfaction.inventoryEffect < 4);
+  const plan = emptyPlan();
+  const normal = finishDay(mixed, plan).history[0];
+  plan.weapons.sword.price = 1;
+  plan.weapons.axe.price = 100;
+  const changed = finishDay(mixed, plan).history[0];
+  assert.deepEqual(changed.satisfaction, normal.satisfaction);
+  assert.equal(normal.satisfaction.unmetDemand, 0);
+  assert.equal(normal.satisfaction.inventoryEffect, 4);
+  assert.equal(normal.satisfaction.demand, normal.items.find(i => i.weapon === 'dagger').demand);
+  const short = finishDay({ ...mixed, stock: { ...mixed.stock, dagger: 1 } }, plan).history[0];
+  assert.ok(short.satisfaction.inventoryEffect < 0);
+  assert.equal(short.satisfaction.unmetDemand, short.satisfaction.demand - 1);
 });
 test('carryover stock satisfies demand without crafting and zero demand has no inventory effect', () => {
   const state = { ...createGame(() => .5), stock: game.stockOf(100) };
   const report = finishDay(state, emptyPlan()).history[0];
   assert.equal(report.quantity, 0); assert.equal(report.satisfaction.inventoryEffect, 4);
   const p = emptyPlan(); weapons.forEach(w => { p.weapons[w.id].price = 100; });
-  const quiet = finishDay(createGame(() => .5), p).history[0].satisfaction;
+  const quiet = finishDay(state, p).history[0].satisfaction;
   assert.equal(quiet.demand, 0); assert.equal(quiet.inventoryEffect, 0);
   assert.ok(Number.isFinite(quiet.score)); assert.ok(quiet.priceEffect < 0);
 });
@@ -195,7 +204,27 @@ test('upgrade purchases charge per level, preserve satisfaction, and cannot over
   assert.throws(() => game.purchaseUpgrade({ ...before, history: Array(30) }, 'anvil'), /complete/);
   const empty = game.purchaseUpgrade(bought, 'advertising');
   assert.equal(empty.cash, 0); assert.ok(validSave(empty));
-  const p = emptyPlan(); p.advertising = 1; assert.match(validate(empty, p), /exceeds/);
+  assert.match(validate(empty, emptyPlan()), /bankrupt/);
+  assert.throws(() => finishDay(empty, emptyPlan()), /bankrupt/);
+  assert.equal(game.isBankrupt({ ...empty, cash: 2 }), true);
+  assert.equal(game.isBankrupt({ ...empty, cash: 3 }), false);
+  assert.equal(game.isBankrupt({ ...empty, stock: { ...empty.stock, dagger: 1 } }), false);
+});
+
+test('an older satisfaction report stays valid after the new rules take effect', () => {
+  const old = finishDay(createGame(() => .5), emptyPlan());
+  const report = old.history[0];
+  // Historic days estimated demand even for empty shelves.
+  report.items.forEach((item, i) => { item.demand = weapons[i].demand; });
+  const demand = report.items.reduce((sum, item) => sum + item.demand, 0);
+  report.satisfaction = { before: 70, priceEffect: 0, inventoryEffect: -12, demand, unmetDemand: demand, score: 58, change: -12 };
+  old.satisfaction = 58;
+  const restored = migrateSave(JSON.parse(JSON.stringify(old)));
+  assert.deepEqual(restored, old);
+  const next = finishDay(restored, blankPlan());
+  assert.equal(next.history[1].satisfaction.model, 'offered-stock');
+  assert.deepEqual(next.history[0], report);
+  assert.ok(validSave(next));
 });
 
 test('three anvil levels persist, charge 50 each, preserve history and stop at maximum', () => {
@@ -287,13 +316,28 @@ test('forge capacity is shared across weapons and paid advertising has no free z
   const upgraded = game.purchaseUpgrade(game.purchaseUpgrade(rich, 'forge'), 'forge');
   assert.equal(validate(upgraded, p), '');
   p.weapons.dagger.quantity = 1; assert.match(validate(upgraded, p), /60 weapons/);
-  const normal = finishDay(rich, emptyPlan()).history[0].items.map(i => i.demand);
-  const ads = game.purchaseUpgrade(rich, 'advertising');
-  assert.deepEqual(finishDay(ads, emptyPlan()).history[0].items.map(i => i.demand), normal);
-  const paid = emptyPlan(); paid.advertising = 100;
-  const plainDemand = finishDay(rich, paid).history[0].items;
-  const adDemand = finishDay(ads, paid).history[0].items;
-  adDemand.forEach((item, i) => assert.ok(item.demand > plainDemand[i].demand));
+  const stocked = { ...rich, stock: { ...rich.stock, dagger: 100 } };
+  const ads = game.purchaseUpgrade(stocked, 'advertising');
+  const daggerDemand = (state, plan) => finishDay(state, plan).history[0].items.find(i => i.weapon === 'dagger').demand;
+  assert.equal(daggerDemand(ads, emptyPlan()), daggerDemand(stocked, emptyPlan()));
+  const paid = emptyPlan(); paid.advertising = 16;
+  assert.ok(daggerDemand(ads, paid) > daggerDemand(stocked, paid));
+});
+
+test('a busy day shares at most 60 orders among stocked weapon lines', () => {
+  const state = { ...createGame(() => .5), market: 3, cash: 10000, stock: { ...game.stockOf(), sword: 80, dagger: 80 } };
+  const plan = emptyPlan(); plan.advertising = 1000;
+  plan.weapons.axe.price = 1;
+  plan.weapons.spear.price = 1;
+  const report = finishDay(state, plan).history[0];
+  const demand = Object.fromEntries(report.items.map(item => [item.weapon, item.demand]));
+  assert.deepEqual(demand, { sword: 18, axe: 0, spear: 0, dagger: 42 });
+  assert.equal(report.sold, 60);
+  assert.equal(report.satisfaction.demand, 60);
+  assert.equal(report.satisfaction.unmetDemand, 0);
+  const scarce = finishDay({ ...state, stock: { ...state.stock, sword: 5 } }, plan).history[0];
+  assert.equal(scarce.sold, 47);
+  assert.equal(scarce.satisfaction.unmetDemand, 13);
 });
 
 test('vise increases demand for every weapon while retaining the satisfaction price calculation', () => {

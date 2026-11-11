@@ -4,7 +4,9 @@
   <img src="./assets/blacksmith-logo.png" alt="Play Alpego's Blacksmith Tycoon" width="420">
 </a>
 
-Download or clone the project, then open [index.html](./index.html) from the project folder in a modern browser. No installation, build, or account is needed. Optional Google Fonts fall back to system fonts offline; all artwork and game code are local.
+**Click the logo to play online.** [Play Alpego’s Blacksmith Tycoon](https://alpegoat.github.io/alpego-blacksmith-tycoon/)
+
+To play locally, download or clone the project and open [index.html](./index.html) from the project folder in a modern browser. No installation, build, or account is needed. Optional Google Fonts fall back to system fonts offline. All artwork and game code are local.
 
 Run a weapon shop for 30 days, starting with 100 gold. Choose a daily mix from this catalog, ordered by highest to lowest normal sale price:
 
@@ -19,7 +21,7 @@ Each weapon has its own quantity, price, stock, and buyers. Prices are whole gol
 
 Crafting and ads are paid upfront. There are no hidden fees, rent, debt, or refunds. Unsold weapons carry over separately: setting a weapon's crafting quantity to zero still allows it to sell existing stock. The evening report shows sales and remaining stock for each weapon, plus total revenue, crafting, advertising, profit, and remaining cash. The ledger has a daily summary with weapon detail rows; detail expenses are crafting only and advertising is included once in the daily summary. The game ends after day 30, or earlier if the shop has no stock and cannot afford its cheapest weapon. The final score is remaining cash. Stock has no liquidation value.
 
-Peasants, sellswords, hunters, and witchers visit after opening. They leave carrying the relevant sword, axe, spear, or dagger. One visitor represents each sale on small days. Busy days group purchases across at most 16 visitors; mixed orders show the first weapon, and their payment includes every item. The animated count and revenue still match the exact daily totals. Skip to results at any time; reduced-motion settings skip automatically. Saving the resolved day before the scene prevents a reload from repeating sales.
+Peasants, sellswords, hunters, and witchers visit after opening. For up to 16 weapons sold, each visitor represents one weapon. On busier days, the animation groups purchases across 16 visitors. A visitor with a mixed order carries the first weapon in that order, and the payment includes every item. The sales tally shows the exact number of weapons sold and the total revenue. You can skip to the results at any time. Reduced-motion settings skip the animation automatically. The game saves the resolved day before the scene starts, so reloading does not repeat sales.
 
 ## Customer satisfaction
 
@@ -70,4 +72,4 @@ node server.js
 
 Visit http://localhost:4175. Run checks with `node --test game.test.js` and `node --check app.js` / `node --check customers.js` / `node --check game.js`.
 
-The main project includes weapon varieties, customer satisfaction, workshop upgrades, and visual polish. The visual layer in `polish.css` adds warm parchment colors, more readable controls, report and dialog transitions, richer shop scenery, forge embers, and distinct customer equipment. Walking pauses at the counter, mixed-weapon purchases retain their own sprites, and reduced-motion preferences skip customer playback and disable decorative motion.
+The main project includes weapon varieties, customer satisfaction, workshop upgrades, and visual polish. The visual layer in `polish.css` adds warm colors, more readable controls, report and dialog transitions, richer shop scenery, forge embers, and distinct customer equipment. Customers pause at the counter during purchases. Reduced-motion preferences skip customer playback and disable decorative motion.

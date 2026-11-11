@@ -1,5 +1,9 @@
 # Alpego's Blacksmith Tycoon
 
+<a href="https://alpegoat.github.io/alpego-blacksmith-tycoon/">
+  <img src="./assets/blacksmith-logo.png" alt="Play Alpego's Blacksmith Tycoon" width="420">
+</a>
+
 Download or clone the project, then open [index.html](./index.html) from the project folder in a modern browser. No installation, build, or account is needed. Optional Google Fonts fall back to system fonts offline; all artwork and game code are local.
 
 Run a weapon shop for 30 days, starting with 100 gold. Choose a daily mix from this catalog, ordered by highest to lowest normal sale price:

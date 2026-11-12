@@ -13,7 +13,7 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background: linear-gradient(var(--wall-tint), var(--wall-tint)),
-    url('assets/forge-wall.png') center / cover no-repeat;
+    url('assets/forge-wall.webp') center / cover no-repeat;
 }
 ::selection{background:#dce5bf;color:#203d30}
 .topbar{background:#fbfaf1e8;min-height:86px}

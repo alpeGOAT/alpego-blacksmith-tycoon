@@ -6,6 +6,7 @@ const gold = n => `<span class="gold-amount">${n.toLocaleString()} ${goldIcon}</
 const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
 const cashDisplay = $('cash');
 const floatingBalance = $('floating-balance');
+const emptyReportMarkup = $('result-content').innerHTML;
 function syncFloatingBalance() {
   const hidden = cashDisplay.getBoundingClientRect().bottom > 0;
   if (floatingBalance.hidden !== hidden) floatingBalance.hidden = hidden;
@@ -170,7 +171,7 @@ function render() {
   } else {
     $('result-label').textContent = 'THE EVENING REPORT'; $('result-heading').textContent = 'Every blade has a beginning.';
     $('result-content').className = 'empty-report';
-    $('result-content').innerHTML = '<div class="empty-icon">⚒</div><h3>The forge is waiting.</h3><p>Choose your weapon mix and open the shop.<br>Your daily results will appear here.</p><div class="tip"><span>✧</span><p><strong>A word from Alpego</strong>Swords sell for more, but daggers are cheaper to make. Mix your stock and watch which weapons sell.</p></div>';
+    $('result-content').innerHTML = emptyReportMarkup;
   }
   renderLedger();
   $('mobile-next-plan').hidden = !last || done || bankrupt;

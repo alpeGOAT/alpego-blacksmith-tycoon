@@ -6,6 +6,12 @@ const gold = n => `<span class="gold-amount">${n.toLocaleString()} ${goldIcon}</
 const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
 const cashDisplay = $('cash');
 const floatingBalance = $('floating-balance');
+function weaponIcon(weapon) {
+  if (weapon.id === 'axe' || weapon.id === 'dagger' || weapon.id === 'spear') {
+    return `<img class="weapon-art" src="assets/${weapon.id}-icon.png" alt="" width="64" height="64">`;
+  }
+  return `<span aria-hidden="true">${weapon.icon}</span>`;
+}
 const emptyReportMarkup = $('result-content').innerHTML;
 function syncFloatingBalance() {
   const hidden = cashDisplay.getBoundingClientRect().bottom > 0;
@@ -55,7 +61,7 @@ function withCurrentSave(change, messageId) {
 }
 function resetPlan() {
   const p = Blacksmith.blankPlan();
-  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${w.icon}</span><div><strong>${w.name}</strong><span id="craft-info-${w.id}">${gold(w.cost)} to craft · market ${gold(w.price)}</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" inputmode="numeric" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}"><span>Price ${goldIcon}</span><input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" inputmode="numeric" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
+  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${weaponIcon(w)}</span><div><strong>${w.name}</strong><span id="craft-info-${w.id}">${gold(w.cost)} to craft · market ${gold(w.price)}</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" inputmode="numeric" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}"><span>Price ${goldIcon}</span><input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" inputmode="numeric" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
   $('advertising').value = p.advertising;
 }
 function plan() { return { weapons: Object.fromEntries(Blacksmith.weapons.map(w => [w.id, { quantity: $(`quantity-${w.id}`).valueAsNumber, price: $(`price-${w.id}`).valueAsNumber }])), advertising: $('advertising').valueAsNumber }; }
@@ -132,7 +138,7 @@ function renderLedger() {
     ]);
     const details = report.items.filter(item => item.quantity || item.sold || item.stock).map(item => {
       const weapon = Blacksmith.weapons.find(w => w.id === item.weapon);
-      return ledgerRow('ledger-item', ['', `${weapon.icon} ${weapon.name}`,
+      return ledgerRow('ledger-item', ['', `${weaponIcon(weapon)} ${weapon.name}`,
         String(item.quantity), String(item.sold), gold(item.price), gold(item.revenue),
         `${gold(item.craftingCost)} craft`, '—', `${item.stock} left`]);
     }).join('');
@@ -166,7 +172,7 @@ function render() {
     $('result-heading').textContent = done ? 'The final hammer falls.' : last.profit > 0 ? 'A good day at the forge.' : last.profit < 0 ? 'A lesson at the forge.' : 'An even day at the forge.';
     $('result-content').className = 'filled-report';
     const rating = state.cash >= 1500 ? 'Master of the forge' : state.cash >= 500 ? 'A flourishing blacksmith' : state.cash > 100 ? 'A promising apprentice' : 'Every master starts somewhere';
-    const breakdown = last.items.map((item, i) => `<div><span>${Blacksmith.weapons[i].icon} ${Blacksmith.weapons[i].name}</span><span>${item.sold} sold · ${item.stock} left</span><strong>${gold(item.revenue)}</strong></div>`).join('');
+    const breakdown = last.items.map((item, i) => `<div><span>${weaponIcon(Blacksmith.weapons[i])} ${Blacksmith.weapons[i].name}</span><span>${item.sold} sold · ${item.stock} left</span><strong>${gold(item.revenue)}</strong></div>`).join('');
     $('result-content').innerHTML = `${done ? `<div class="final-banner"><span>✦ ${rating}</span><strong>${gold(state.cash)}</strong><p>Final cash · ${state.history.reduce((n,r) => n+r.sold,0)} weapons sold in 30 days</p></div>` : `<div class="sold-hero"><strong>${last.sold}<small> / ${last.sold + last.stock}</small></strong><span>WEAPONS SOLD</span></div>`}<div class="weapon-sales">${breakdown}</div>${satisfactionReport(last)}<div class="report-rows"><div><span>${done ? 'Day 30 revenue' : 'Sales revenue'}</span><strong>${gold(last.revenue)}</strong></div><div><span>Crafting expenses</span><strong>−${gold(last.craftingCost)}</strong></div><div><span>Advertising expenses</span><strong>−${gold(last.advertising)}</strong></div><div class="report-total"><span>Total expenses</span><strong>${gold(last.expenses)}</strong></div><div class="profit-row"><span>Day ${last.day} profit</span><strong class="${last.profit < 0 ? 'negative' : 'positive'}">${signed(last.profit)}</strong></div><div><span>Remaining cash</span><strong>${gold(last.cash)}</strong></div></div><p class="report-note">${done ? `${last.stock} unsold weapons remain. Final score is based on cash; stock is not liquidated.` : last.stock ? `${last.stock} unsold weapons saved for tomorrow. Adjust each weapon’s price to find its buyers.` : last.sold ? 'Sold out! Consider changing your weapon mix or raising prices tomorrow.' : 'No sales today. Try lowering prices or spreading the word.'}</p>`;
   } else {
     $('result-label').textContent = 'THE EVENING REPORT'; $('result-heading').textContent = 'Every blade has a beginning.';

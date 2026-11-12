@@ -248,6 +248,17 @@ html[data-theme="dark"]{color-scheme:dark;--paper:#30261b;--line:#3a4941;--ink:#
 .mobile-next-plan,
 .mobile-ledger-label { display: none; }
 
+.weapon-art {
+  width: 1.4em;
+  height: 1.4em;
+  vertical-align: middle;
+}
+.weapon-icon .weapon-art {
+  display: block;
+  width: 30px;
+  height: 30px;
+}
+
 .tip .alpego-portrait {
   position: relative;
   flex: 0 0 56px;

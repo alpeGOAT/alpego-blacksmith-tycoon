@@ -18,7 +18,7 @@ const ShopCustomers = (() => {
   function sprite(kind, index, weapon) {
     const purchased = {
       sword: '<path d="m47 51 4-39 4 39-5 5z" fill="#d9e3df" stroke="#748b84"/><path d="m42 53 17 1m-9 1-1 11" stroke="#caa257" stroke-width="3"/>',
-      axe: '<path d="m49 23 1 44" stroke="#80533d" stroke-width="4"/><path d="m49 25 9-5v20l-9-5z" fill="#b7c7be" stroke="#748b84"/>',
+      axe: '<path d="m49 21 1 53" stroke="#80533d" stroke-width="4"/><path d="M49 28q6-1 9-7 6 11 0 24-4-8-9-9z" fill="#a3b5af" stroke="#526663"/><path d="M58 23q4 10 0 19" fill="none" stroke="#e3ebe3" stroke-width="2"/>',
       spear: '<path d="m49 25 1 58" stroke="#80533d" stroke-width="3"/><path d="m45 27 4-20 5 20-4 7z" fill="#d9e3df" stroke="#748b84"/>',
       dagger: '<path d="m46 50 5-24 3 25-4 5z" fill="#d9e3df" stroke="#748b84"/><path d="m45 53 12 2" stroke="#d3aa56" stroke-width="3"/><path d="m50 55-1 9" stroke="#80533d" stroke-width="4"/>'
     };

@@ -32,7 +32,18 @@
   <script defer src="game.js"></script><script defer src="customers.js"></script><script defer src="app.js"></script><script defer src="music.js"></script>
 </head>
 <body>
-  <header class="topbar"><div class="header-start"><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false"><span aria-hidden="true">☾</span> <span>Dark mode</span></button><a class="brand" href="./index.html"><span class="brand-icon">⚒</span> ALPEGO’S <span class="brand-sub">BLACKSMITH TYCOON</span></a></div><div class="header-actions"><span class="save-status" id="save-status">Saved on this browser</span><button class="text-button" id="help-button">How to play <span>↗</span></button><button class="text-button" id="restart-button">New game</button><button class="music-toggle" id="music-toggle" type="button" aria-label="Background music" aria-pressed="false" title="Play The Old Tower Inn — RandomMind (CC0)"><span aria-hidden="true">♫</span><span id="music-label">Music: Off</span></button><span class="music-status" id="music-status" role="status"></span></div></header>
+  <header class="topbar">
+    <div class="header-preferences">
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Dark mode" aria-pressed="false"><span aria-hidden="true">☾</span> <span>Dark mode</span></button>
+      <button class="music-toggle" id="music-toggle" type="button" aria-label="Background music" aria-pressed="false" title="Play The Old Tower Inn — RandomMind (CC0)"><span aria-hidden="true">♫</span><span id="music-label">Music: Off</span></button>
+    </div>
+    <a class="brand" href="./index.html"><span class="brand-owner">Alpego’s</span> <span class="brand-title">Blacksmith Tycoon</span><span class="brand-ornament" aria-hidden="true">⚒</span></a>
+    <div class="header-actions">
+      <button class="text-button" id="help-button">How to play <span>↗</span></button>
+      <button class="text-button" id="restart-button">New game</button>
+    </div>
+    <span class="music-status" id="music-status" role="status"></span>
+  </header>
   <audio id="background-music" preload="none" loop><source src="assets/audio/the-old-tower-inn.mp3" type="audio/mpeg"><source src="assets/audio/the-old-tower-inn.wav" type="audio/wav"></audio>
   <main>
     <div class="floating-balance" id="floating-balance" hidden>

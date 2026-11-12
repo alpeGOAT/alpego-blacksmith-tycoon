@@ -10,20 +10,19 @@ function syncFloatingBalance() {
   const hidden = cashDisplay.getBoundingClientRect().bottom > 0;
   if (floatingBalance.hidden !== hidden) floatingBalance.hidden = hidden;
 }
-let state = Blacksmith.createGame(), storageAvailable = true, servingCustomers = false;
+let state = Blacksmith.createGame(), servingCustomers = false;
 let savedSnapshot = null;
 try {
   savedSnapshot = localStorage.getItem(key);
   const restored = Blacksmith.migrateSave(JSON.parse(savedSnapshot || localStorage.getItem('alpegos-blacksmith-weapons-v4') || localStorage.getItem('alpegos-blacksmith-weapons-v3') || localStorage.getItem('alpegos-blacksmith-weapons-v2') || localStorage.getItem('alpegos-blacksmith-v1')));
   if (restored) state = restored;
-} catch { storageAvailable = false; }
+} catch {}
 function persist() {
   try {
     const next = JSON.stringify(state);
     localStorage.setItem(key, next);
     savedSnapshot = next;
-    storageAvailable = true;
-  } catch { storageAvailable = false; }
+  } catch {}
 }
 function withCurrentSave(change, messageId) {
   const apply = () => {
@@ -143,9 +142,6 @@ function renderLedger() {
 function render() {
   const done = state.history.length === 30, last = state.history.at(-1);
   const bankrupt = !done && Blacksmith.isBankrupt(state);
-  $('save-status').textContent = storageAvailable
-    ? (savedSnapshot ? '● Saved on this browser' : '● Saves automatically')
-    : 'Session only · saving unavailable';
   const balance = gold(state.cash);
   cashDisplay.innerHTML = balance;
   $('floating-cash').innerHTML = balance;

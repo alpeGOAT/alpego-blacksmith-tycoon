@@ -49,12 +49,6 @@ main { padding-top: 310px; }
 }
 .floating-balance strong { font-size: 16px; font-variant-numeric: tabular-nums; }
 [data-theme="dark"] .floating-balance { background: #352a1e; color: #f8e3bb; }
-@media (max-width: 680px) {
-  main { padding-top: 240px; }
-}
-@media (max-width: 420px) {
-  main { padding-top: 264px; }
-}
 .stats{background:#fdfcf5;border-radius:13px;box-shadow:0 8px 24px #394c2910;overflow:hidden}
 .stats article{background:linear-gradient(140deg,#fff9,transparent)}
 .stat-label{font-size:10px;color:#6e7c63;letter-spacing:1.15px}
@@ -192,7 +186,122 @@ html[data-theme="dark"]{color-scheme:dark;--paper:#30261b;--line:#3a4941;--ink:#
   background: transparent;
 }
 
+.mobile-game-nav,
+.mobile-next-plan,
+.mobile-ledger-label { display: none; }
+
 @media (max-width: 680px) {
-  .scene-heading { flex-direction: column; scroll-margin-top: 56px; }
+  main { padding: 16px 12px 0; }
+
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .topbar .header-start {
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .header-start .brand { order: -1; }
+  .topbar .header-actions {
+    display: grid;
+    flex: 1 0 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+  }
+  .topbar :is(.theme-toggle, .header-actions button) { min-height: 44px; font-size: 12px; }
+  .topbar .music-toggle { min-width: 0; padding-inline: 4px; }
+
+  .mobile-game-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  :is(.mobile-game-nav a, .mobile-next-plan) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #f9edcf;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  [data-theme="dark"] :is(.mobile-game-nav a, .mobile-next-plan) { background: #304035; }
+  :is(#day-plan, #workshop-upgrades, #evening-report, #shop-ledger, .scene-heading) { scroll-margin-top: 56px; }
+  .mobile-next-plan { margin-top: 12px; }
+
+  .stats { margin-bottom: 16px; }
+  .stats article { padding: 12px; }
+  .stats strong { font-size: 24px; margin: 6px 0 4px; }
+  .stats .day-stat {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 10px;
+  }
+  .day-stat .stat-label { grid-column: 1 / -1; }
+  .day-stat .progress { margin: 0; }
+
+  .workspace { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  :is(.planning, .results, .upgrades-panel) { min-width: 0; padding: 16px; }
+  .upgrades-panel, .shop-scene { margin-bottom: 16px; }
+  .upgrade-item { padding: 11px; }
+  .upgrade-item p { font-size: 12px; line-height: 1.45; color: var(--muted); }
+  .upgrade-buy { min-height: 44px; font-size: 11px; }
+  .scene-heading { flex-direction: column; }
   .scene-heading #skip-customers { min-height: 44px; max-width: none; }
+
+  .weapon-plan-row {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(52px, 22%));
+    gap: 8px;
+  }
+  .weapon-info { gap: 5px; }
+  .weapon-info strong { font-size: 14px; }
+  .weapon-info div > span { font-size: 11px; line-height: 1.4; }
+  .weapon-plan-row label { min-width: 0; font-size: 12px; }
+  .weapon-plan-row input { height: 44px; font-size: 16px; }
+  .results, .empty-report { min-height: 0; }
+  .empty-report { padding-top: 20px; }
+
+  .ledger .table-scroll { max-height: none; overflow: visible; padding: 0 12px 12px; }
+  .ledger :is(table, tbody) { display: block; white-space: normal; }
+  .ledger thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .ledger tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 6px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    margin-bottom: 5px;
+  }
+  .ledger .ledger-summary { margin-top: 12px; }
+  .ledger tbody td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .ledger td.empty-ledger { grid-column: 1 / -1; }
+  .ledger-summary td:nth-child(2) { grid-column: span 2; }
+  .ledger-item td:nth-child(2) { grid-column: 1 / -1; }
+  .ledger-summary td:nth-child(5), .ledger-item td:is(:first-child, :nth-child(8)) { display: none; }
+  .mobile-ledger-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+  }
 }

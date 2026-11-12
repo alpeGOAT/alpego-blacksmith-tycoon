@@ -55,7 +55,7 @@ function withCurrentSave(change, messageId) {
 }
 function resetPlan() {
   const p = Blacksmith.blankPlan();
-  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${w.icon}</span><div><strong>${w.name}</strong><span id="craft-info-${w.id}">${gold(w.cost)} to craft · market ${gold(w.price)}</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}"><span>Price ${goldIcon}</span><input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
+  $('weapon-plans').innerHTML = Blacksmith.weapons.map(w => `<div class="weapon-plan-row"><div class="weapon-info"><span class="weapon-icon">${w.icon}</span><div><strong>${w.name}</strong><span id="craft-info-${w.id}">${gold(w.cost)} to craft · market ${gold(w.price)}</span><span id="inventory-${w.id}"></span></div></div><label for="quantity-${w.id}">Craft<input id="quantity-${w.id}" aria-label="${w.name} quantity to craft" type="number" inputmode="numeric" min="0" max="40" step="1" value="${p.weapons[w.id].quantity}" required></label><label for="price-${w.id}"><span>Price ${goldIcon}</span><input id="price-${w.id}" aria-label="${w.name} price in gold" type="number" inputmode="numeric" min="1" max="100" step="1" value="${w.price}" required></label></div>`).join('');
   $('advertising').value = p.advertising;
 }
 function plan() { return { weapons: Object.fromEntries(Blacksmith.weapons.map(w => [w.id, { quantity: $(`quantity-${w.id}`).valueAsNumber, price: $(`price-${w.id}`).valueAsNumber }])), advertising: $('advertising').valueAsNumber }; }
@@ -112,6 +112,34 @@ function satisfactionReport(report) {
   const limited = s.change !== s.priceEffect + s.inventoryEffect ? ' Score capped at 0–100.' : '';
   return `<section class="satisfaction-report" aria-label="Day ${report.day} customer satisfaction"><strong>Customer satisfaction: ${s.score}/100 (${points(s.change)})</strong><p>${priceReason}: ${points(s.priceEffect)}.</p><p>${inventoryReason}: ${points(s.inventoryEffect)}.</p><p>${s.before} → ${s.score}.${limited}</p><p>${report.day === 30 ? 'Season complete; no further customer visits.' : `Expected demand tomorrow: ${demandEffect(s.score)} from satisfaction. Market conditions, prices and advertising also apply.`}</p></section>`;
 }
+function ledgerRow(kind, values) {
+  const labels = ['Day', 'Weapon', 'Crafted', 'Sold', 'Price', 'Revenue', 'Expenses', 'Profit', kind === 'ledger-item' ? 'Stock' : 'Cash'];
+  const cells = values.map((value, index) => {
+    const content = typeof value === 'string' ? { text: value } : value;
+    const className = content.className ? ` class="${content.className}"` : '';
+    return `<td role="cell"${className}><span class="mobile-ledger-label" aria-hidden="true">${labels[index]}</span>${content.text}</td>`;
+  }).join('');
+  return `<tr role="row" class="${kind}">${cells}</tr>`;
+}
+function renderLedger() {
+  $('ledger-count').textContent = `${state.history.length} day${state.history.length === 1 ? '' : 's'} in business`;
+  $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(report => {
+    const summary = ledgerRow('ledger-summary', [
+      `<span class="day-chip">${String(report.day).padStart(2, '0')}</span>`, 'All weapons',
+      String(report.quantity), String(report.sold), '—', gold(report.revenue), gold(report.expenses),
+      { text: signed(report.profit), className: report.profit < 0 ? 'negative' : 'positive' },
+      `<strong>${gold(report.cash)}</strong>`
+    ]);
+    const details = report.items.filter(item => item.quantity || item.sold || item.stock).map(item => {
+      const weapon = Blacksmith.weapons.find(w => w.id === item.weapon);
+      return ledgerRow('ledger-item', ['', `${weapon.icon} ${weapon.name}`,
+        String(item.quantity), String(item.sold), gold(item.price), gold(item.revenue),
+        `${gold(item.craftingCost)} craft`, '—', `${item.stock} left`]);
+    }).join('');
+    return summary + details;
+  }).join('') : '<tr role="row"><td role="cell" colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
+}
+
 function render() {
   const done = state.history.length === 30, last = state.history.at(-1);
   const bankrupt = !done && Blacksmith.isBankrupt(state);
@@ -148,8 +176,8 @@ function render() {
     $('result-content').className = 'empty-report';
     $('result-content').innerHTML = '<div class="empty-icon">⚒</div><h3>The forge is waiting.</h3><p>Choose your weapon mix and open the shop.<br>Your daily results will appear here.</p><div class="tip"><span>✧</span><p><strong>A word from Alpego</strong>Swords sell for more, but daggers are cheaper to make. Mix your stock and watch which weapons sell.</p></div>';
   }
-  $('ledger-count').textContent = `${state.history.length} day${state.history.length === 1 ? '' : 's'} in business`;
-  $('ledger-body').innerHTML = state.history.length ? [...state.history].reverse().map(r => `<tr class="ledger-summary"><td><span class="day-chip">${String(r.day).padStart(2, '0')}</span></td><td>All weapons</td><td>${r.quantity}</td><td>${r.sold}</td><td>—</td><td>${gold(r.revenue)}</td><td>${gold(r.expenses)}</td><td class="${r.profit < 0 ? 'negative' : 'positive'}">${signed(r.profit)}</td><td><strong>${gold(r.cash)}</strong></td></tr>${r.items.filter(item => item.quantity || item.sold || item.stock).map(item => { const w = Blacksmith.weapons.find(w => w.id === item.weapon); return `<tr class="ledger-item"><td></td><td>${w.icon} ${w.name}</td><td>${item.quantity}</td><td>${item.sold}</td><td>${gold(item.price)}</td><td>${gold(item.revenue)}</td><td>${gold(item.craftingCost)} craft</td><td>—</td><td>${item.stock} left</td></tr>`; }).join('')}`).join('') : '<tr><td colspan="9" class="empty-ledger">A fresh ledger, a fresh start. Your story begins on day one.</td></tr>';
+  renderLedger();
+  $('mobile-next-plan').hidden = !last || done || bankrupt;
   if (bankrupt) {
     $('result-label').textContent = 'SHOP CLOSED';
     $('result-heading').textContent = 'The shop is bankrupt.';
@@ -188,7 +216,12 @@ $('plan-form').addEventListener('submit', e => {
     $('phase').textContent = 'SHOP OPEN'; $('open-shop').innerHTML = 'Serving customers… <span>⚒</span>';
     $('result-label').textContent = `DAY ${state.history.length} · SHOP OPEN`; $('result-heading').textContent = 'Adventures start at your counter.';
     $('result-content').className = 'empty-report'; $('result-content').innerHTML = '<div class="empty-icon">⚔</div><h3>Steel, smiles, and a little gold.</h3><p>Customers are visiting the shop above.<br>Your evening report is on its way.</p>';
-    ShopCustomers.play(state.history.at(-1), () => { servingCustomers = false; $('restart-button').disabled = false; render(); });
+    ShopCustomers.play(state.history.at(-1), () => {
+      servingCustomers = false;
+      $('restart-button').disabled = false;
+      render();
+      if (matchMedia('(max-width: 680px)').matches) $('evening-report').scrollIntoView({ block: 'start' });
+    });
   }, 'validation');
 });
 $('skip-customers').addEventListener('click', ShopCustomers.finish);

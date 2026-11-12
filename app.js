@@ -7,10 +7,7 @@ const signed = n => `${n > 0 ? '+' : n < 0 ? '−' : ''}${gold(Math.abs(n))}`;
 const cashDisplay = $('cash');
 const floatingBalance = $('floating-balance');
 function weaponIcon(weapon) {
-  if (weapon.id === 'axe' || weapon.id === 'dagger' || weapon.id === 'spear') {
-    return `<img class="weapon-art" src="assets/${weapon.id}-icon.png" alt="" width="64" height="64">`;
-  }
-  return `<span aria-hidden="true">${weapon.icon}</span>`;
+  return `<img class="weapon-art" src="assets/${weapon.id}-icon.png" alt="" width="64" height="64">`;
 }
 const emptyReportMarkup = $('result-content').innerHTML;
 function syncFloatingBalance() {

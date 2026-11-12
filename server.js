@@ -6,6 +6,7 @@ files['/assets/blacksmith-logo.png'] = 'assets/blacksmith-logo.png';
 files['/assets/axe-icon.png'] = 'assets/axe-icon.png';
 files['/assets/dagger-icon.png'] = 'assets/dagger-icon.png';
 files['/assets/spear-icon.png'] = 'assets/spear-icon.png';
+files['/assets/sword-icon.png'] = 'assets/sword-icon.png';
 files['/assets/forge-wall.webp'] = 'assets/forge-wall.webp';
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.png': 'image/png', '.webp': 'image/webp' };
 http.createServer((req, res) => {
